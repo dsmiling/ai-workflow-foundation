@@ -1,0 +1,15 @@
+{
+  "name": "aiwf-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI Workflow Foundation desktop shell",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build --no-bundle",
+    "build:installer": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.7"
+  }
+}

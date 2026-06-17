@@ -1,0 +1,12 @@
+%%{init: {'flowchart': {'useMaxWidth': false, 'nodeSpacing': 48, 'rankSpacing': 76, 'padding': 18, 'htmlLabels': true, 'curve': 'basis'}}}%%
+graph LR
+    repo["仓库根目录"]
+    desktop_build_1["desktop:build: tauri build --no-bundle"]
+    source_desktop["desktop"]
+    source_desktop --> desktop_build_1
+    desktop_build_installer_2["desktop:build:installer: tauri build"]
+    source_desktop --> desktop_build_installer_2
+    desktop_dev_3["desktop:dev: tauri dev"]
+    source_desktop --> desktop_dev_3
+    desktop_tauri_4["desktop:tauri: tauri"]
+    source_desktop --> desktop_tauri_4

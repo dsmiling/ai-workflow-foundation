@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aiwf://schemas/change-operation.schema.json",
+  "title": "ChangeOperation",
+  "description": "Structured change applied to run-local workflow or session overlay.",
+  "type": "object",
+  "required": ["target", "operation"],
+  "properties": {
+    "target": {
+      "type": "string",
+      "enum": [
+        "workflow.node.params.feedback_history",
+        "workflow.node.params.last_feedback",
+        "workflow.node.params.extra_prompt",
+        "workflow.node.inputs",
+        "skill.quality",
+        "skill.ref",
+        "run.artifact"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "enum": ["append", "set", "merge"]
+    },
+    "value": {}
+  }
+}

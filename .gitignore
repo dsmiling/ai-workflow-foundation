@@ -1,0 +1,20 @@
+# Rust / Tauri build output
+**/target/
+
+# Node.js dependencies
+**/node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Local runtime / test workspaces
+.aiwf/
+.test-tmp/
+.test-workspace/
+.doctor-workspace/

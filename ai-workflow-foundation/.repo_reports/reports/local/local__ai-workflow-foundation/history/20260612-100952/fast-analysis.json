@@ -1,0 +1,105 @@
+{
+  "mode": "fast-analysis",
+  "project": {
+    "repository_type": "Python 应用或服务工程",
+    "repository_purpose": "AI Workflow Foundation is a local-first foundation for personal AI workflows。整体属于 Python 应用或服务工程。",
+    "suitable_scenarios": [
+      "Workflow definitions are files.",
+      "Nodes have explicit inputs, outputs, skills, and approval modes.",
+      "Artifacts are written to disk.",
+      "Runs can pause for review."
+    ],
+    "core_technologies": [
+      "Python",
+      "Rust",
+      "Rust crate 布局",
+      "cargo"
+    ],
+    "primary_modules": [
+      {
+        "module_name": "desktop",
+        "role": "package-or-app",
+        "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+        "technologies": [
+          "<no_ext>",
+          ".json",
+          ".timestamp",
+          ".d"
+        ],
+        "key_files": [
+          "desktop\\node_modules\\@tauri-apps\\cli\\index.js",
+          "desktop\\node_modules\\@tauri-apps\\cli\\main.js",
+          "desktop\\node_modules\\@tauri-apps\\cli-win32-x64-msvc\\package.json",
+          "desktop\\node_modules\\@tauri-apps\\cli\\package.json",
+          "desktop\\package.json"
+        ],
+        "is_core": false
+      },
+      {
+        "module_name": "docs",
+        "role": "文档",
+        "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+        "technologies": [
+          ".md"
+        ],
+        "key_files": [],
+        "is_core": false
+      },
+      {
+        "module_name": "examples",
+        "role": "目录模块",
+        "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+        "technologies": [
+          ".json",
+          ".md"
+        ],
+        "key_files": [],
+        "is_core": false
+      },
+      {
+        "module_name": "src",
+        "role": "源码根",
+        "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+        "technologies": [
+          ".py"
+        ],
+        "key_files": [],
+        "is_core": true
+      },
+      {
+        "module_name": "tests",
+        "role": "python-module",
+        "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+        "technologies": [
+          ".py"
+        ],
+        "key_files": [],
+        "is_core": false
+      },
+      {
+        "module_name": "web",
+        "role": "frontend",
+        "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+        "technologies": [
+          ".html"
+        ],
+        "key_files": [],
+        "is_core": false
+      }
+    ],
+    "startup_commands": [],
+    "build_commands": [
+      "desktop:build -> tauri build --no-bundle",
+      "desktop:build:installer -> tauri build"
+    ],
+    "usage_threshold": "中",
+    "documentation_readiness": "较高",
+    "workflow_fit": "更适合作为实现参考，需要结合你的现有工作流做二次判断。",
+    "direct_use_judgement": "更适合作为参考实现，直接投入生产前仍需补充验证。",
+    "recommendation": "建议继续深入",
+    "risk_notes": [
+      "多运行时环境会提升接入和运维复杂度",
+      "未检测到明显的 CI 文件"
+    ]
+  }
+}

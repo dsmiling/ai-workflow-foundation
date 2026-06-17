@@ -1,0 +1,170 @@
+{
+  "mode": "explainable-analysis",
+  "project_overview": {
+    "repository_type": "Python 应用或服务工程",
+    "repository_purpose": "AI Workflow Foundation is a local-first foundation for personal AI workflows。整体属于 Python 应用或服务工程。",
+    "core_value": [
+      "核心特性：Workflow definitions are files.。",
+      "核心特性：Nodes have explicit inputs, outputs, skills, and approval modes.。",
+      "核心特性：Artifacts are written to disk.。",
+      "核心特性：Runs can pause for review.。",
+      "仓库当前暴露出 6 个主要顶层模块，说明它不是单一脚本，而是具备明确分层的工程项目。"
+    ],
+    "suitable_scenarios": [
+      "Workflow definitions are files.",
+      "Nodes have explicit inputs, outputs, skills, and approval modes.",
+      "Artifacts are written to disk.",
+      "Runs can pause for review."
+    ],
+    "core_technologies": [
+      "Python",
+      "Rust",
+      "Rust crate 布局",
+      "cargo"
+    ],
+    "runtime_boundaries": [
+      "desktop：承担该层的主要代码与资源组织职责，主要技术为 JSON。",
+      "docs：保存项目说明、设计文档和使用指南。，主要技术为 Markdown。",
+      "examples：展示项目的用法、演示或样例工程。，主要技术为 JSON、Markdown。",
+      "src：承载前端入口、页面编排与交互逻辑。，主要技术为 Python。",
+      "tests：汇总测试代码、夹具和验证逻辑。，主要技术为 Python。",
+      "web：提供浏览器侧界面、状态和交互能力。，主要技术为 待进一步识别。"
+    ],
+    "technical_highlights": [
+      "主要语言：Python、Rust。",
+      "框架线索：Rust crate 布局。",
+      "构建与工具链：cargo。",
+      "质量保障线索：Repository contains visible test/spec-related files。",
+      "关键清单文件：desktop\\package-lock.json、desktop\\package.json、desktop\\src-tauri\\Cargo.toml、pyproject.toml。",
+      "已识别入口文件：desktop\\node_modules\\@tauri-apps\\cli\\index.js、desktop\\node_modules\\@tauri-apps\\cli\\main.js。"
+    ]
+  },
+  "usage_judgement": {
+    "startup_commands": [],
+    "build_commands": [
+      "desktop:build -> tauri build --no-bundle",
+      "desktop:build:installer -> tauri build"
+    ],
+    "environment_requirements": [
+      "Node.js 环境",
+      "Rust 工具链",
+      "cargo 构建工具"
+    ],
+    "direct_use_judgement": "更适合作为参考实现，直接投入生产前仍需补充验证。",
+    "workflow_fit": "更适合作为实现参考，需要结合你的现有工作流做二次判断。",
+    "integration_advice": [
+      "接入前先跑通 dev/build/test 三条主命令，再决定是直接使用还是参考实现。"
+    ]
+  },
+  "module_layers": [
+    {
+      "layer_name": "结构层",
+      "purpose": "展示项目的顶层容器与运行边界，帮助先理解代码库的大框架。",
+      "modules": [
+        "desktop（package-or-app）",
+        "docs（文档）",
+        "examples（目录模块）",
+        "src（源码根）",
+        "tests（python-module）",
+        "web（frontend）"
+      ]
+    }
+  ],
+  "module_analysis": [
+    {
+      "module_name": "desktop",
+      "role": "package-or-app",
+      "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+      "technologies": [
+        "<no_ext>",
+        ".json",
+        ".timestamp",
+        ".d"
+      ],
+      "key_files": [
+        "desktop\\node_modules\\@tauri-apps\\cli\\index.js",
+        "desktop\\node_modules\\@tauri-apps\\cli\\main.js",
+        "desktop\\node_modules\\@tauri-apps\\cli-win32-x64-msvc\\package.json",
+        "desktop\\node_modules\\@tauri-apps\\cli\\package.json",
+        "desktop\\package.json"
+      ],
+      "is_core": false
+    },
+    {
+      "module_name": "docs",
+      "role": "文档",
+      "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+      "technologies": [
+        ".md"
+      ],
+      "key_files": [],
+      "is_core": false
+    },
+    {
+      "module_name": "examples",
+      "role": "目录模块",
+      "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+      "technologies": [
+        ".json",
+        ".md"
+      ],
+      "key_files": [],
+      "is_core": false
+    },
+    {
+      "module_name": "src",
+      "role": "源码根",
+      "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+      "technologies": [
+        ".py"
+      ],
+      "key_files": [],
+      "is_core": true
+    },
+    {
+      "module_name": "tests",
+      "role": "python-module",
+      "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+      "technologies": [
+        ".py"
+      ],
+      "key_files": [],
+      "is_core": false
+    },
+    {
+      "module_name": "web",
+      "role": "frontend",
+      "responsibility": "这是一个顶层结构模块，用于承载该层代码与资源。",
+      "technologies": [
+        ".html"
+      ],
+      "key_files": [],
+      "is_core": false
+    }
+  ],
+  "documentation_outputs": {
+    "project_docs": [
+      "项目用途说明",
+      "技术架构摘要",
+      "运行与构建说明"
+    ],
+    "module_docs": [
+      "desktop 模块说明",
+      "docs 模块说明",
+      "examples 模块说明",
+      "src 模块说明",
+      "tests 模块说明"
+    ],
+    "integration_docs": [
+      "接入判断说明",
+      "工作流适配建议",
+      "风险与限制说明"
+    ]
+  },
+  "supplemental_assessment": {
+    "文档完备度": "较高",
+    "接入友好度": "中",
+    "工作流适配度": "中",
+    "工程复杂度": "中高"
+  }
+}

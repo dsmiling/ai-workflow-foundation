@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Workflow Foundation</title>
+    <link rel="stylesheet" href="/web/styles/tokens.css" />
+    <link rel="stylesheet" href="/web/styles/base.css" />
+    <link rel="stylesheet" href="/web/styles/layout.css" />
+    <link rel="stylesheet" href="/web/styles/workflow.css" />
+    <link rel="stylesheet" href="/web/styles/settings.css" />
+  </head>
+<body>
+    <header>
+      <h1>AI Workflow Foundation</h1>
+      <div class="muted" id="health">checking...</div>
+    </header>
+
+    <main>
+      <nav>
+        <button class="tab active" data-page="workflowPage">工作流</button>
+        <button class="tab" data-page="settingsPage">设置</button>
+      </nav>
+
+      <div class="page active workflow-layout" id="workflowPage" data-workflow-view="nodes">
+        <div class="workflow-toolbar">
+          <select id="workflowSelect"></select>
+          <button id="validateBtn">Validate</button>
+          <button class="primary" id="runBtn">Run</button>
+          <button class="primary" id="saveWorkflowBtn">保存</button>
+          <button id="initBtn">Init</button>
+          <div class="meta-line">
+            <span id="workflowMeta" class="muted"></span>
+            <span class="muted">·</span>
+            <span id="log" class="muted"></span>
+          </div>
+        </div>
+
+        <div class="workflow-shell">
+          <aside class="context-panel">
+            <div class="context-title">工作台</div>
+            <button class="context-tab" data-workflow-view="workflows">
+              <span>工作流</span>
+              <span class="context-count" id="workflowCount">0</span>
+            </button>
+            <button class="context-tab active" data-workflow-view="nodes">
+              <span>节点</span>
+              <span class="context-count" id="nodeCount">0</span>
+            </button>
+            <button class="context-tab" data-workflow-view="runs">
+              <span>运行</span>
+              <span class="context-count" id="runStatusLabel">idle</span>
+            </button>
+          </aside>
+
+          <div class="stage">
+            <div class="workflow-view" data-view-panel="workflows">
+              <div class="stage-head">
+                <div>
+                  <h2 class="stage-title">工作流</h2>
+                  <div class="stage-subtitle">单击选中工作流；双击进入节点编排。</div>
+                </div>
+                <button id="newWorkflowBtn">新建</button>
+              </div>
+              <div class="stage-body">
+                <div class="workflow-grid" id="workflowCards" tabindex="0"></div>
+              </div>
+            </div>
+
+            <div class="workflow-view active" data-view-panel="nodes">
+              <div class="stage-head">
+                <div>
+                  <h2 class="stage-title">节点编排</h2>
+                  <div class="stage-subtitle">状态机视图：节点按转移编排，运行中实时显示阶段、耗时与预期产物。</div>
+                </div>
+                <button id="addNodeBtn">添加节点</button>
+              </div>
+              <div class="stage-body">
+                <div id="runLiveBanner" class="run-live-banner hidden"></div>
+                <div class="state-machine-board node-canvas editor-node-list" id="editorNodes" tabindex="0"></div>
+              </div>
+            </div>
+
+            <div class="workflow-view" data-view-panel="runs">
+              <div class="stage-head">
+                <div>
+                  <h2 class="stage-title">运行</h2>
+                  <div class="stage-subtitle">查看当前工作流的执行状态、节点输出和 Artifact。</div>
+                </div>
+                <button id="loadBtn">Load</button>
+              </div>
+              <div class="stage-body">
+                <div class="run-grid">
+                  <div class="run-panel">
+                    <div class="compact-card">
+                      <label for="runId">Run id</label>
+                      <input id="runId" placeholder="run_..." />
+                      <div class="row" style="margin-top: 8px">
+                        <button id="resumeBtn">Resume</button>
+                        <button id="rerunBtn">Rerun</button>
+                      </div>
+                      <label for="rerunNode">Rerun node</label>
+                      <select id="rerunNode"></select>
+                    </div>
+                    <div class="node-list" id="nodes"></div>
+                  </div>
+                  <div>
+                    <h2>Artifact</h2>
+                    <div class="row">
+                      <select id="artifactSelect"></select>
+                      <button id="artifactBtn">Open</button>
+                      <button id="artifactSaveBtn">Save</button>
+                    </div>
+                    <textarea id="artifact" class="artifact-editor" placeholder="打开 Artifact 后可查看或编辑。"></textarea>
+                    <div class="artifact-meta" id="artifactMeta">(no artifact selected)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="inspector">
+            <div class="inspector-head">
+              <h2 id="inspectorTitle">节点详情</h2>
+              <div class="muted" id="inspectorSubtitle">编辑当前选中的节点。</div>
+            </div>
+
+            <div class="inspector-body">
+              <div class="inspector-panel" data-inspector-panel="workflows">
+                <div id="workflowSelectionView">
+                  <h2>工作流概览</h2>
+                  <div class="compact-card" id="workflowSelectionSummary">单击工作流查看概览，双击进入节点编排。</div>
+                  <div class="muted panel-block">双击工作流卡片进入节点页；需要改 id / 名称时点下方按钮。</div>
+                  <div class="row panel-block">
+                    <button id="editWorkflowInfoBtn">编辑工作流信息</button>
+                  </div>
+                </div>
+                <div id="workflowEditView" hidden>
+                <h2>工作流详情</h2>
+                <label for="wfId">Workflow id</label>
+                <input id="wfId" />
+                <label for="wfName">Workflow name</label>
+                <input id="wfName" />
+                <label for="wfRoot">文件根目录</label>
+                <input id="wfRoot" placeholder="例如 G:\FF_Wang\ProjectStudy\..." />
+                <label for="wfInitial">初始节点 (initial)</label>
+                <input id="wfInitial" placeholder="requirement_analysis" />
+                <label for="wfTransitions">状态转移 (transitions JSON)</label>
+                <textarea id="wfTransitions" rows="8" placeholder='[{"from":"node_a","to":"node_b","when":"always"}]'></textarea>
+                <label for="workflowPath">工作流路径</label>
+                <input id="workflowPath" readonly />
+                <div class="row panel-block">
+                  <button id="cloneWorkflowBtn">复制</button>
+                  <button class="danger" id="deleteWorkflowBtn">删除</button>
+                </div>
+                </div>
+              </div>
+
+              <div class="inspector-panel active" data-inspector-panel="nodes">
+                <div id="nodeSelectionView">
+                  <div class="inspector-card" id="nodeInspectorCard">
+                    <div class="inspector-field" id="nodeOverviewTypeField">
+                      <label for="nodeType">节点模式</label>
+                      <select id="nodeType">
+                        <option value="ai">执行 + Review（推荐）</option>
+                        <option value="review">独立 Review 节点（高级）</option>
+                      </select>
+                    </div>
+                    <div class="node-detail-tabs" id="nodeOverviewTabs">
+                      <button type="button" class="node-detail-tab active" data-node-detail-tab="execute">执行</button>
+                      <button type="button" class="node-detail-tab" data-node-detail-tab="iterate">迭代</button>
+                      <button type="button" class="node-detail-tab" data-node-detail-tab="review">Review</button>
+                    </div>
+                    <div id="nodeOverviewExecutePanel" data-node-detail-panel="execute">
+                      <div class="node-overview-section">节点信息</div>
+                      <div id="nodeSelectionSummary" class="inspector-kv">单击节点查看概览，双击进入编辑。</div>
+                      <div class="inspector-section-label">执行结果</div>
+                      <div id="nodeChangelist" class="changelist-panel muted">运行节点后显示变更清单。</div>
+                      <div class="node-test-skill-warn" id="nodeTestSkillWarn" hidden>未绑定 Skill，请双击节点进入编辑。</div>
+                      <div class="inspector-section-label">节点测试</div>
+                      <div class="inspector-field">
+                        <label for="nodeTestExecutor">测试引擎</label>
+                        <select id="nodeTestExecutor"></select>
+                      </div>
+                      <div class="inspector-field" id="nodeTestAgentProviderField" hidden>
+                        <label for="nodeTestAgentProvider">角色 Agent</label>
+                        <select id="nodeTestAgentProvider"></select>
+                      </div>
+                      <label class="inspector-check" for="nodeTestEnsureUpstream">
+                        <input type="checkbox" id="nodeTestEnsureUpstream" checked />
+                        <span>自动执行上游节点</span>
+                      </label>
+                      <div class="inspector-actions">
+                        <button class="primary" id="nodeTestRunBtn">运行测试</button>
+                        <button id="nodeTestOpenArtifactBtn" disabled>查看产出</button>
+                      </div>
+                      <div class="node-test-result" id="nodeTestResult">
+                        <div class="muted">尚未运行测试。</div>
+                      </div>
+                      <textarea id="nodeTestArtifactPreview" class="code-editor node-test-preview" readonly hidden placeholder="测试成功后在此预览产出。"></textarea>
+                    </div>
+                    <div id="nodeOverviewIteratePanel" data-node-detail-panel="iterate" hidden>
+                      <div class="node-overview-section">节点迭代</div>
+                      <div class="muted">多轮 refine 产物，完成后提交进入 Review。</div>
+                    </div>
+                    <div id="nodeOverviewReviewPanel" data-node-detail-panel="review" hidden>
+                      <div class="node-overview-section">Review 信息</div>
+                      <div id="nodeReviewSummary" class="inspector-kv">Review 配置与验收状态。</div>
+                      <div id="nodeReviewRuntimePanel" hidden>
+                        <div class="inspector-section-label">Review 操作</div>
+                        <label for="nodeReviewFeedback">验收反馈</label>
+                        <textarea id="nodeReviewFeedback" rows="3" placeholder="说明通过理由或驳回原因。"></textarea>
+                        <label for="nodeReviewRejectTarget">驳回回退（可选）</label>
+                        <select id="nodeReviewRejectTarget">
+                          <option value="">默认 · 重跑当前节点</option>
+                        </select>
+                        <div class="inspector-actions">
+                          <button class="primary" id="nodeReviewApproveBtn">通过</button>
+                          <button class="danger" id="nodeReviewRejectBtn">驳回</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div id="nodeEditView" hidden>
+                <div class="node-detail-tabs" id="nodeEditTabs">
+                  <button type="button" class="node-detail-tab active" data-node-edit-tab="execute">执行配置</button>
+                  <button type="button" class="node-detail-tab" data-node-edit-tab="review">Review 配置</button>
+                </div>
+                <div id="nodeExecuteEditPanel" data-node-edit-panel="execute">
+                <label for="nodeId">Node id</label>
+                <input id="nodeId" />
+                <label for="nodeName">Node name</label>
+                <input id="nodeName" />
+                <div id="nodeSkillField">
+                  <label for="nodeSkill">Skill</label>
+                  <select id="nodeSkill"></select>
+                </div>
+                <div id="nodeExecutorField">
+                  <label for="nodeExecutor">执行引擎</label>
+                  <select id="nodeExecutor"></select>
+                  <div class="inspector-field" id="nodeAgentProviderField" hidden>
+                    <label for="nodeAgentProvider">角色 Agent</label>
+                    <select id="nodeAgentProvider"></select>
+                  </div>
+                </div>
+                <div id="nodeInputsField">
+                  <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <label for="nodeInputsEditor" style="margin:0">执行 Inputs</label>
+                    <button type="button" class="ghost" id="nodeInputsAdvancedToggle">高级 · JSON</button>
+                  </div>
+                  <div id="nodeInputsEditor"></div>
+                  <textarea id="nodeInputs" class="code-editor" hidden></textarea>
+                </div>
+                <div id="nodeOutputsField">
+                  <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <label style="margin:0">产出契约（只读）</label>
+                    <button type="button" class="ghost" id="nodeOutputsAdvancedToggle">高级 · JSON</button>
+                  </div>
+                  <pre id="nodeOutputContractPreview" class="skill-meta">选择 Skill 后显示 Output Contract。</pre>
+                  <textarea id="nodeOutputs" class="code-editor" hidden></textarea>
+                </div>
+                <div class="skill-meta" id="skillPreview">选择 Skill 后显示预览。</div>
+                </div>
+                <div id="nodeReviewEditPanel" data-node-edit-panel="review" hidden>
+                <div class="row">
+                  <div>
+                    <label for="approvalMode">Review 模式</label>
+                    <select id="approvalMode">
+                      <option value="auto">auto · 自动通过</option>
+                      <option value="human">human · 人工验收</option>
+                      <option value="ai">ai · AI 验收</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="approvalLevel">Review 级别</label>
+                    <select id="approvalLevel">
+                      <option value="optional">optional</option>
+                      <option value="required">required</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="inspector-field" id="nodeReviewSkillField">
+                  <label for="nodeReviewSkill">Review Skill（可选）</label>
+                  <select id="nodeReviewSkill"></select>
+                </div>
+                <label for="nodeReviewInputs">Review Inputs (JSON)</label>
+                <textarea id="nodeReviewInputs" class="code-editor" placeholder='{"primary_output": "artifact.node_id"}'></textarea>
+                <label for="nodeReviewCriteria">Review 验收标准</label>
+                <textarea id="nodeReviewCriteria" rows="4" placeholder="描述需要检查的质量标准、边界条件等。"></textarea>
+                <label for="nodeReviewChecklist">Review 检查清单（每行一项）</label>
+                <textarea id="nodeReviewChecklist" rows="4" placeholder="产出文件命名正确&#10;包含所有必需模块&#10;无遗漏风险项"></textarea>
+                <div class="inspector-field" id="nodeRejectTargetField">
+                  <label for="nodeRejectTarget">驳回回退节点（可选，默认重跑当前节点）</label>
+                  <select id="nodeRejectTarget">
+                    <option value="">默认 · 重跑当前节点</option>
+                  </select>
+                </div>
+                </div>
+                <div class="row panel-block">
+                  <button id="moveUpBtn">上移</button>
+                  <button id="moveDownBtn">下移</button>
+                  <button class="primary" id="testNodeBtn">测试节点</button>
+                  <button class="danger" id="removeNodeBtn">删除</button>
+                </div>
+                </div>
+              </div>
+
+              <div class="inspector-panel" data-inspector-panel="runs">
+                <h2>运行详情</h2>
+                <label for="reviewNode">Review 节点</label>
+                <select id="reviewNode"></select>
+                <label for="targetNode">驳回回退节点（可选）</label>
+                <select id="targetNode"></select>
+                <div class="muted panel-block">不选回退节点时，默认重跑当前 Review 节点。</div>
+                <label for="feedback">Feedback</label>
+                <textarea id="feedback" placeholder="Describe what should change."></textarea>
+                <div class="row">
+                  <button id="approveBtn">Approve</button>
+                  <button class="danger" id="rejectBtn">Reject</button>
+                </div>
+
+                <h2 class="panel-block">Changes</h2>
+                <div class="stack" id="changes"></div>
+
+                <h2 class="panel-block">Revisions</h2>
+                <div class="row">
+                  <input id="commitMessage" placeholder="Revision message" />
+                  <button id="commitBtn">Commit</button>
+                </div>
+                <div class="stack" id="revisions" style="margin-top: 10px"></div>
+                <pre id="diff" style="min-height: 160px; max-height: 260px">(no diff selected)</pre>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="page settings-layout" id="settingsPage">
+        <div class="settings-shell">
+          <aside class="context-panel">
+            <div class="context-title">设置</div>
+            <button class="context-tab active" data-settings-view="general">通用</button>
+            <button class="context-tab" data-settings-view="agents">Agent</button>
+            <button class="context-tab" data-settings-view="skills">Skill 助手</button>
+          </aside>
+          <div class="stage">
+            <div class="settings-view active" data-settings-panel="general">
+              <h2>通用</h2>
+              <div class="stack">
+                <div>
+                  <label for="executor">默认执行器</label>
+                  <select id="executor"></select>
+                </div>
+                <div id="agentProviderField" hidden>
+                  <label for="agentProvider">角色 Agent</label>
+                  <select id="agentProvider"></select>
+                </div>
+                <div class="muted">Run / 节点测试使用这里的默认执行器。API Key 与 CLI 命令通过环境变量配置。</div>
+              </div>
+            </div>
+
+            <div class="settings-view" data-settings-panel="agents">
+              <div class="skill-assistant">
+                <div class="skill-assistant-head">
+                  <h2 class="stage-title">Agent 配置</h2>
+                </div>
+                <div class="skill-source-tabs">
+                  <button class="skill-source-tab active" data-agent-tab="providers">连接层</button>
+                  <button class="skill-source-tab" data-agent-tab="assistants">助手</button>
+                </div>
+
+                <div class="agent-tab-panel active" data-agent-panel="providers">
+                  <div class="skill-assistant-body">
+                    <div class="skill-list-panel">
+                      <div id="agentProviderList"></div>
+                    </div>
+                    <div class="skill-editor-grid agent-readonly-panel">
+                      <div class="provider-detail-card" id="providerDetailCard" hidden>
+                        <div class="provider-detail-head">
+                          <div class="provider-detail-title" id="providerDetailTitle"></div>
+                          <div class="agent-status-pill" id="providerStatusPill"></div>
+                        </div>
+                        <div class="provider-status-detail" id="providerStatusDetail"></div>
+                        <div class="skill-actions">
+                          <button class="primary" id="testProviderBtn" disabled>测试连接</button>
+                        </div>
+                        <div class="agent-test-result" id="providerTestResult"></div>
+                      </div>
+                      <div class="muted provider-detail-empty" id="providerDetailEmpty">选择左侧连接层查看状态。</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="agent-tab-panel" data-agent-panel="assistants">
+                  <div class="skill-assistant-body agent-role-layout">
+                    <div class="skill-list-panel">
+                      <div class="agent-role-list-head">
+                        <div class="agent-list-section-label">助手</div>
+                        <div class="agent-role-list-actions">
+                          <button type="button" class="compact" id="newRoleAgentBtn">新建</button>
+                          <button type="button" class="compact" id="openAgentGenerateBtn">AI 生成</button>
+                          <button type="button" class="compact" id="duplicateRoleAgentBtn" disabled>复制</button>
+                        </div>
+                      </div>
+                      <div id="agentRoleList"></div>
+                    </div>
+                    <div class="role-editor-shell">
+                      <div class="role-editor-empty muted" id="roleEditorEmpty">选择左侧助手进行编辑，或点击「新建」。</div>
+                      <div class="role-editor-panel" id="roleEditorPanel" hidden>
+                        <div class="role-editor-head">
+                          <div class="role-editor-mode" id="roleEditorModeLabel">编辑助手</div>
+                          <div class="role-editor-head-actions">
+                            <button type="button" class="primary compact" id="createRoleAgentBtn" hidden>创建助手</button>
+                            <button type="button" id="cancelRoleEditorBtn">取消</button>
+                          </div>
+                        </div>
+                        <div class="skill-editor-grid">
+                          <div class="row">
+                            <div>
+                              <label for="roleAgentId">Agent id</label>
+                              <input id="roleAgentId" />
+                            </div>
+                            <div>
+                              <label for="roleAgentLabel">显示名称</label>
+                              <input id="roleAgentLabel" />
+                            </div>
+                          </div>
+                          <div>
+                            <label for="roleAgentProvider">底层 Provider</label>
+                            <select id="roleAgentProvider"></select>
+                          </div>
+                          <div class="inspector-section-label">身份 (ident)</div>
+                          <div class="row">
+                            <div>
+                              <label for="roleAgentIdentName">名称</label>
+                              <input id="roleAgentIdentName" />
+                            </div>
+                            <div>
+                              <label for="roleAgentIdentRole">角色</label>
+                              <input id="roleAgentIdentRole" />
+                            </div>
+                          </div>
+                          <label for="roleAgentIdentVibe">气质</label>
+                          <input id="roleAgentIdentVibe" />
+                          <label for="roleAgentSoul">灵魂 (soul)</label>
+                          <textarea id="roleAgentSoul" rows="8" placeholder="Wayland Rules 风格：身份一句、场景行为、边界约束。"></textarea>
+                          <div class="role-editor-create-tools" id="roleEditorCreateTools" hidden>
+                            <label for="agentTemplateSelect">助手模板</label>
+                            <div class="row">
+                              <select id="agentTemplateSelect" aria-label="助手模板"></select>
+                              <button type="button" id="applyAgentTemplateBtn">应用模板</button>
+                            </div>
+                          </div>
+                          <div class="inspector-section-label" id="roleEditorTestLabel" hidden>连接测试</div>
+                          <label for="roleAgentTestPrompt" id="roleAgentTestPromptLabel" hidden>测试 Prompt</label>
+                          <textarea id="roleAgentTestPrompt" rows="2" hidden>Reply with exactly: AIWF agent ok</textarea>
+                          <div class="skill-actions" id="roleEditorEditActions" hidden>
+                            <button class="primary" type="button" id="saveRoleAgentBtn">保存修改</button>
+                            <button class="danger" type="button" id="deleteRoleAgentBtn">删除</button>
+                            <button type="button" id="testRoleAgentBtn">测试连接</button>
+                          </div>
+                          <div class="agent-test-result" id="roleAgentTestResult" hidden></div>
+                          <div class="muted role-editor-meta" id="roleAgentMeta"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-view" data-settings-panel="skills">
+              <div class="skill-assistant">
+                <div class="skill-assistant-head">
+                  <div>
+                    <h2 class="stage-title">Skill 助手</h2>
+                    <div class="stage-subtitle">管理工作区 Skill、从草稿/Wayland/市场安装，或导入 SKILL.md。</div>
+                  </div>
+                  <div class="skill-assistant-actions">
+                    <button id="importSkillBtn" type="button">导入</button>
+                    <input id="importSkillFile" type="file" accept=".md,text/markdown" hidden />
+                    <button id="newSkillBtn">新建 Skill</button>
+                  </div>
+                </div>
+                <div class="skill-source-tabs">
+                  <button class="skill-source-tab active" data-skill-source="workspace">我的</button>
+                  <button class="skill-source-tab" data-skill-source="example">草稿</button>
+                  <button class="skill-source-tab" data-skill-source="wayland">Wayland</button>
+                  <button class="skill-source-tab" data-skill-source="market">市场</button>
+                </div>
+                <div class="skill-assistant-body">
+                  <div class="skill-list-panel">
+                    <div id="skillList"></div>
+                  </div>
+                  <div class="skill-detail-panel">
+                  <div class="skill-editor-grid skill-editor-compact">
+                    <div class="muted skill-meta-line skill-detail-status" id="skillMeta">选择或新建 Skill。</div>
+                    <div class="row">
+                      <div>
+                        <label for="skillId">Skill id</label>
+                        <input id="skillId" />
+                      </div>
+                      <div>
+                        <label for="skillName">Name</label>
+                        <input id="skillName" />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div>
+                        <label for="skillGoal">Goal</label>
+                        <textarea id="skillGoal" rows="2"></textarea>
+                      </div>
+                      <div>
+                        <label for="skillDescription">Description</label>
+                        <textarea id="skillDescription" rows="2"></textarea>
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div>
+                        <label for="skillExecutor">Executor</label>
+                        <select id="skillExecutor">
+                          <option value="">默认</option>
+                          <option value="skill">Skill 编排</option>
+                          <option value="mock">Mock</option>
+                          <option value="agent">Agent</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label for="skillPrimaryOutput">Primary output</label>
+                        <input id="skillPrimaryOutput" placeholder="output.md" />
+                      </div>
+                    </div>
+                    <label for="skillQuality">Quality (每行一条)</label>
+                    <textarea id="skillQuality" rows="2"></textarea>
+                    <label for="skillMarkdown">SKILL.md</label>
+                    <textarea id="skillMarkdown" class="code-editor" rows="8"></textarea>
+                    <div class="skill-actions">
+                      <button class="primary" id="saveSkillBtn">保存</button>
+                      <button id="cloneSkillBtn">复制到工作区</button>
+                      <button class="danger" id="deleteSkillBtn">删除</button>
+                    </div>
+                  </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-generate-dialog" id="agentGenerateDialog" hidden>
+        <div class="agent-generate-backdrop" id="agentGenerateBackdrop"></div>
+        <div class="agent-generate-card" role="dialog" aria-labelledby="agentGenerateTitle">
+          <div class="agent-generate-head">
+            <h3 id="agentGenerateTitle">AI 生成助手</h3>
+            <button type="button" class="agent-generate-close" id="closeAgentGenerateBtn" aria-label="关闭">×</button>
+          </div>
+          <div class="stack agent-generate-body">
+            <div>
+              <label for="agentGenerateProvider">连接层</label>
+              <select id="agentGenerateProvider"></select>
+            </div>
+            <div class="agent-generate-progress">
+              <div class="agent-generate-progress-bar">
+                <div class="agent-generate-progress-fill" id="agentGenerateProgressFill"></div>
+              </div>
+              <div class="muted" id="agentGenerateProgressLabel">可描述需求，也可先填一半表单后再来优化。</div>
+            </div>
+            <div class="agent-generate-chat" id="agentGenerateChat"></div>
+            <pre class="agent-generate-log" id="agentGenerateLog"></pre>
+            <div>
+              <label for="agentGenerateInput">补充描述</label>
+              <textarea
+                id="agentGenerateInput"
+                rows="4"
+                placeholder="描述你想创建的助手，或说明要在现有参数基础上如何优化。"
+              ></textarea>
+            </div>
+            <div class="skill-actions">
+              <button type="button" class="primary" id="sendAgentGenerateBtn">发送</button>
+              <button type="button" id="applyAgentGenerateBtn" disabled>填入表单</button>
+              <button type="button" id="cancelAgentGenerateBtn">关闭</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+    <script type="module" src="/web/js/main.js"></script>
+</html>

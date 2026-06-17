@@ -1,0 +1,15 @@
+export const workflowState = {
+  currentState: null,
+  runPollTimer: null,
+  runClockTimer: null,
+  currentArtifactRef: null,
+  workflowCatalog: [],
+  editingWorkflow: { id: "", name: "", nodes: [] },
+  selectedNodeIndex: 0,
+  nodeEditOpen: false,
+  nodeDetailTab: "execute",
+  workflowEditOpen: false,
+  currentWorkflowPath: "",
+  currentWorkflowEditable: false,
+  suppressNodeForm: false,
+};

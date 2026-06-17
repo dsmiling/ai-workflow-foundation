@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aiwf://schemas/node-session.schema.json",
+  "title": "NodeSession",
+  "description": "Multi-turn iteration container for a single node within one run.",
+  "type": "object",
+  "required": ["node_id", "status", "turn"],
+  "properties": {
+    "node_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["iterating", "committed", "abandoned"] },
+    "turn": { "type": "integer", "minimum": 0 },
+    "skill_ref": { "type": ["string", "null"] },
+    "skill_override": { "type": ["object", "null"] },
+    "inputs_overlay": { "type": "object" },
+    "committed_at": { "type": ["string", "null"] },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" }
+  }
+}

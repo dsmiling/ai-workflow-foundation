@@ -1,0 +1,26 @@
+{
+  "version": "1",
+  "skills": [
+    {
+      "id": "unity_requirement_analysis",
+      "name": "Unity Requirement Analysis",
+      "description": "Analyze raw Unity big-event requirements into structured Markdown.",
+      "clone_from": "unity_requirement_analysis",
+      "tags": ["unity", "analysis"]
+    },
+    {
+      "id": "module_mapping",
+      "name": "Module Mapping",
+      "description": "Map analyzed requirements to activity modules and StandardLib support.",
+      "clone_from": "module_mapping",
+      "tags": ["unity", "mapping"]
+    },
+    {
+      "id": "unity_build_plan",
+      "name": "Unity Build Plan",
+      "description": "Generate a document-first build plan from approved module mapping.",
+      "clone_from": "unity_build_plan",
+      "tags": ["unity", "plan"]
+    }
+  ]
+}

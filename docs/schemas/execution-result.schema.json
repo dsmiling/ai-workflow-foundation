@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aiwf://schemas/execution-result.schema.json",
+  "title": "ExecutionResult",
+  "description": "Structured result of a single node execution turn.",
+  "type": "object",
+  "required": ["summary", "assets", "changes", "primary_ref"],
+  "properties": {
+    "summary": { "type": "string" },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/AssetRecord" }
+    },
+    "changes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ChangeItem" }
+    },
+    "primary_ref": { "type": "string" }
+  },
+  "$defs": {
+    "AssetRecord": {
+      "type": "object",
+      "required": ["ref", "kind", "action"],
+      "properties": {
+        "ref": { "type": "string" },
+        "kind": { "type": "string", "enum": ["markdown", "json", "text", "other"] },
+        "action": { "type": "string", "enum": ["create", "modify", "delete", "rename"] },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string" }
+      }
+    },
+    "ChangeItem": {
+      "type": "object",
+      "required": ["action", "target", "summary"],
+      "properties": {
+        "action": { "type": "string", "enum": ["create", "modify", "delete", "rename"] },
+        "target": { "type": "string" },
+        "summary": { "type": "string" }
+      }
+    }
+  }
+}

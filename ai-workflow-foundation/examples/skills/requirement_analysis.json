@@ -1,0 +1,16 @@
+{
+  "id": "requirement_analysis",
+  "name": "Requirement Analysis",
+  "description": "Analyze a raw user requirement and turn it into a clear workflow-ready requirement artifact.",
+  "goal": "Extract goals, constraints, open questions, expected artifacts, and review risks from the user requirement.",
+  "output": {
+    "primary": "requirement_analysis.md"
+  },
+  "quality": [
+    "Explain the user's goal in concrete terms.",
+    "Separate confirmed requirements from assumptions.",
+    "List unclear points that need review.",
+    "Keep the result readable by an engineering user."
+  ]
+}
+

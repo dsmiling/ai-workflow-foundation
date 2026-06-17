@@ -1,0 +1,17 @@
+export const settingsState = {
+  skillCatalog: [],
+  skillAssistantSource: "workspace",
+  selectedSkillId: "",
+  selectedSkillSource: "",
+  selectedSkillEditable: false,
+  selectedSkillCloneFrom: "",
+  skillEditorIsNew: false,
+  waylandSkillCatalog: [],
+  marketSkillCatalog: [],
+  agentCatalog: [],
+  agentTab: "providers",
+  selectedProviderId: "",
+  selectedRoleId: "",
+  roleEditorMode: "none",
+  roleEditorSourceId: "",
+};

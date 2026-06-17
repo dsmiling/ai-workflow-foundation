@@ -1,0 +1,74 @@
+{
+  "id": "simple_foundation",
+  "name": "Simple AI Workflow Foundation Demo",
+  "initial": "requirement_analysis",
+  "transitions": [
+    { "from": "requirement_analysis", "to": "module_breakdown", "when": "always" },
+    { "from": "module_breakdown", "to": "review_plan", "when": "always" },
+    { "from": "review_plan", "to": "build_plan", "when": "approved" },
+    { "from": "review_plan", "to": "module_breakdown", "when": "rejected" }
+  ],
+  "nodes": [
+    {
+      "id": "requirement_analysis",
+      "name": "Requirement Analysis",
+      "type": "ai",
+      "skill": "requirement_analysis",
+      "inputs": {
+        "raw_requirement": "Create a local-first AI workflow foundation with reviewable nodes, artifacts, and revision snapshots."
+      },
+      "outputs": {
+        "primary": "requirement_analysis.md"
+      },
+      "approval": {
+        "mode": "auto",
+        "level": "optional"
+      }
+    },
+    {
+      "id": "module_breakdown",
+      "name": "Module Breakdown",
+      "type": "ai",
+      "skill": "module_breakdown",
+      "inputs": {
+        "requirement": "artifact.requirement_analysis"
+      },
+      "outputs": {
+        "primary": "module_breakdown.md"
+      },
+      "approval": {
+        "mode": "auto",
+        "level": "optional"
+      }
+    },
+    {
+      "id": "review_plan",
+      "name": "Review Plan",
+      "type": "review",
+      "inputs": {
+        "module_breakdown": "artifact.module_breakdown"
+      },
+      "approval": {
+        "mode": "human",
+        "level": "required"
+      }
+    },
+    {
+      "id": "build_plan",
+      "name": "Build Plan",
+      "type": "ai",
+      "skill": "build_plan",
+      "inputs": {
+        "module_breakdown": "artifact.module_breakdown"
+      },
+      "outputs": {
+        "primary": "build_plan.md"
+      },
+      "approval": {
+        "mode": "auto",
+        "level": "optional"
+      }
+    }
+  ]
+}
+

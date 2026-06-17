@@ -1,0 +1,38 @@
+---
+description: 代码修改完成后重启 AIWF 后台并打开桌面应用
+alwaysApply: true
+---
+
+# 修改后重启桌面
+
+完成 `ai-workflow-foundation` 相关代码修改后，在回复用户前执行以下步骤。
+
+## 何时触发
+
+- 修改了 Python 后端（`src/aiwf/`、`aiwf_cli.py`）
+- 修改了 Web UI（`web/`）
+- 修改了示例资源（`examples/`）
+- 修改了桌面壳相关文件（`desktop/`、`Sync-DesktopApp.ps1`、`Launch-AIWF.ps1`）
+
+仅文档或测试 workspace 临时文件变更时，可不重启。
+
+## 必做步骤
+
+1. 若改了 Python / Web / examples，先跑测试：
+   ```powershell
+   Set-Location "G:\FF_Wang\ProjectStudy\ai-workflow-foundation\ai-workflow-foundation"
+   $env:PYTHONPATH="src"
+   py -3 -m unittest discover -s tests -q
+   ```
+2. 重启并打开桌面（项目根目录执行）：
+   ```powershell
+   Set-Location "G:\FF_Wang\ProjectStudy\ai-workflow-foundation\ai-workflow-foundation"
+   .\Restart-AIWF.ps1
+   ```
+3. 在回复中说明已重启，并提示用户查看新打开的桌面窗口。
+
+## 说明
+
+- 桌面应用（Tauri）会自带启动 Python 后台；不要只改代码后让用户手动刷新浏览器。
+- `Restart-AIWF.ps1` 会先 `Sync-DesktopApp.ps1` 同步资源，再结束旧进程，最后启动桌面。
+- 开发入口是 `Launch-AIWF.ps1`（`npm run dev`），不是单独 `serve` 后开浏览器。

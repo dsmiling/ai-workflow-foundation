@@ -1,0 +1,13 @@
+.aiwf/
+**/target/
+**/node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.test-tmp/
+.test-workspace/
+.doctor-workspace/
+.venv/
+dist/
+build/
+*.egg-info/

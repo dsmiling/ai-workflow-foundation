@@ -1,0 +1,16 @@
+{
+  "id": "build_plan",
+  "name": "Build Plan",
+  "description": "Turn the approved module breakdown into a concrete implementation plan.",
+  "goal": "Create a minimal execution plan that can drive the next implementation step.",
+  "output": {
+    "primary": "build_plan.md"
+  },
+  "quality": [
+    "List implementation steps in dependency order.",
+    "Call out the smallest verifiable milestone.",
+    "State what should not be implemented yet.",
+    "Include a verification command or manual check where possible."
+  ]
+}
+

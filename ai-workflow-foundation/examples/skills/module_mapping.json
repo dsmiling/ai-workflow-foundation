@@ -1,0 +1,19 @@
+{
+  "id": "module_mapping",
+  "name": "Module Mapping",
+  "executor": "skill",
+  "ref": "examples/skills/module_mapping.SKILL.md",
+  "description": "Map analyzed requirements to Unity big-event modules and StandardLib support status.",
+  "goal": "Output each feature requirement with mapped activity modules, StandardLib support, missing items, and risks.",
+  "output": {
+    "primary": "module_mapping.md",
+    "structured": "module_mapping.json"
+  },
+  "quality": [
+    "Every module must explain its purpose.",
+    "Every module must declare expected inputs and outputs.",
+    "Every module must mark whether StandardLib support already exists.",
+    "Missing modules must list implementation risk.",
+    "Reward systems must be split into login, milestone, and ranking modules when applicable."
+  ]
+}

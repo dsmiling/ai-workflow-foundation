@@ -1,0 +1,18 @@
+{
+  "id": "unity_build_plan",
+  "name": "Unity Build Plan",
+  "executor": "skill",
+  "ref": "examples/skills/unity_build_plan.SKILL.md",
+  "description": "Turn an approved module mapping into a document-first implementation plan for a Unity big event.",
+  "goal": "Create a minimal execution plan that can drive the next implementation step without generating Unity code in v0.2.",
+  "output": {
+    "primary": "build_plan.md"
+  },
+  "quality": [
+    "List implementation steps in dependency order.",
+    "Call out the smallest verifiable milestone.",
+    "State what should not be implemented yet.",
+    "Include a verification command or manual check where possible.",
+    "Reference mapped modules from the approved module mapping artifact."
+  ]
+}

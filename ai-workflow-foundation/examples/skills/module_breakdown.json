@@ -1,0 +1,16 @@
+{
+  "id": "module_breakdown",
+  "name": "Module Breakdown",
+  "description": "Break a reviewed requirement into workflow modules and node-level responsibilities.",
+  "goal": "Produce a modular plan with node names, responsibilities, inputs, outputs, and approval needs.",
+  "output": {
+    "primary": "module_breakdown.md"
+  },
+  "quality": [
+    "Every module must have a clear responsibility.",
+    "Every module must declare expected inputs and outputs.",
+    "Mark modules that require human review.",
+    "Avoid implementation details that are not needed for the current foundation MVP."
+  ]
+}
+

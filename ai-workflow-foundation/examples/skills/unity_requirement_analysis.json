@@ -1,0 +1,18 @@
+{
+  "id": "unity_requirement_analysis",
+  "name": "Unity Requirement Analysis",
+  "executor": "skill",
+  "ref": "examples/skills/unity_requirement_analysis.SKILL.md",
+  "description": "Analyze a Unity big-event requirement and produce a workflow-ready requirement artifact.",
+  "goal": "Extract event goals, reward surfaces, content modules, constraints, open questions, and review risks for a Unity activity workflow.",
+  "output": {
+    "primary": "requirement_analysis.md"
+  },
+  "quality": [
+    "Explain the event goal in concrete player-facing terms.",
+    "Separate confirmed requirements from assumptions.",
+    "Call out reward systems that must be split into independent modules.",
+    "List unclear points that need human review before module mapping.",
+    "Keep the result readable by an engineering user."
+  ]
+}
