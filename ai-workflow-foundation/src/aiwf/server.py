@@ -593,6 +593,18 @@ def create_server(
                     return {
                         "state": self.runner_for_body(body).commit_session(run_id, node_id).to_dict()
                     }
+                if method == "POST" and len(parts) == 6 and parts[2] == "nodes" and parts[4] == "session" and parts[5] == "revert":
+                    node_id = parts[3]
+                    turn_raw = body.get("turn")
+                    try:
+                        turn = int(turn_raw)
+                    except (TypeError, ValueError) as exc:
+                        raise ApiError(HTTPStatus.BAD_REQUEST, "revert requires integer turn.") from exc
+                    if turn < 1:
+                        raise ApiError(HTTPStatus.BAD_REQUEST, "revert turn must be >= 1.")
+                    return {
+                        "state": self.runner_for_body(body).revert_session_turn(run_id, node_id, turn).to_dict()
+                    }
                 if method == "GET" and parts[2:] == ["artifacts"]:
                     artifacts_dir = run_dir / "artifacts"
                     refs: list[str] = []

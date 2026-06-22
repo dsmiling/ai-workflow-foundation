@@ -47,10 +47,21 @@ export async function renderNodeIteratePanel() {
 
   const turnLines = turns
     .map(
-      (turn) =>
-        `<div class="iterate-turn"><strong>Turn ${turn.turn}</strong>` +
-        `${turn.feedback ? ` · ${escapeHtml(turn.feedback)}` : ""}` +
-        `<div class="muted">${escapeHtml(turn.result?.summary || "")}</div></div>`,
+      (turn) => {
+        const canRevert = turn.turn < session.turn;
+        return (
+          `<div class="iterate-turn">` +
+          `<div class="iterate-turn-header">` +
+          `<strong>Turn ${turn.turn}</strong>` +
+          `${turn.feedback ? ` · ${escapeHtml(turn.feedback)}` : ""}` +
+          (canRevert
+            ? ` <button type="button" class="linkish iterate-revert-btn" data-revert-turn="${turn.turn}">还原到此</button>`
+            : "") +
+          `</div>` +
+          `<div class="muted">${escapeHtml(turn.result?.summary || "")}</div>` +
+          `</div>`
+        );
+      },
     )
     .join("");
 
@@ -88,6 +99,13 @@ export async function renderNodeIteratePanel() {
   $("nodeIterateCommitBtn")?.addEventListener("click", () => {
     submitCommit().catch((error) => setLog(error.message));
   });
+  panel.querySelectorAll(".iterate-revert-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const turn = Number(button.getAttribute("data-revert-turn"));
+      if (!Number.isFinite(turn)) return;
+      submitRevert(turn).catch((error) => setLog(error.message));
+    });
+  });
 }
 
 async function submitIterate() {
@@ -118,6 +136,21 @@ async function submitCommit() {
   );
   setState(payload.state);
   setLog(`Session 已提交: ${node.id}`);
+  await loadState();
+  renderNodeInspector();
+}
+
+async function submitRevert(turn) {
+  const node = currentNode();
+  const runId = workflowState.currentState?.run_id || $("runId")?.value?.trim();
+  if (!node || !runId) return;
+  if (!window.confirm(`还原到 Turn ${turn}？Turn ${turn + 1} 及之后的修改将被丢弃。`)) return;
+  const payload = await api(
+    `/runs/${encodeURIComponent(runId)}/nodes/${encodeURIComponent(node.id)}/session/revert`,
+    { method: "POST", body: JSON.stringify({ turn, ...readGlobalExecutorPayload() }) },
+  );
+  setState(payload.state);
+  setLog(`已还原到 Turn ${turn}: ${node.id}`);
   await loadState();
   renderNodeInspector();
 }

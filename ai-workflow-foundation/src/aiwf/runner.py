@@ -136,6 +136,33 @@ class WorkflowRunner:
         self.store.save_state(run_dir, state)
         return state
 
+    def revert_session_turn(self, run_id: str, node_id: str, turn: int) -> RunState:
+        run_dir = self.store.get_run_dir(run_id)
+        workflow = self.store.load_locked_workflow(run_dir)
+        node = next((item for item in workflow.nodes if item.id == node_id), None)
+        if node is None:
+            raise ValueError(f"Node not found in workflow: {node_id}")
+        if node.type == "review":
+            raise ValueError("Review nodes do not support session revert.")
+        result = self.sessions.revert_to_turn(run_dir, node_id, turn)
+        state = self.store.load_state(run_dir)
+        existing = state.nodes.get(node_id, NodeRunState(id=node_id))
+        node_state = NodeRunState(
+            id=node_id,
+            status="paused",
+            phase="execute",
+            artifact=result.primary_ref,
+            result=result,
+            message=f"Reverted to turn {turn}.",
+            started_at=existing.started_at,
+            finished_at=self.store.now(),
+        )
+        state.nodes[node_id] = node_state
+        state.current_node = node_id
+        state.status = "paused"
+        self.store.save_state(run_dir, state)
+        return state
+
     def start(self, workflow_path: Path, until_node: str | None = None) -> RunState:
         workflow = self.store.load_workflow(workflow_path)
         run_dir = self.store.create_run(workflow_path, workflow)

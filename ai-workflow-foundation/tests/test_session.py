@@ -47,6 +47,33 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(committed_session.status, "committed")
         self.assertEqual(committed.nodes["requirement_analysis"].result.summary, committed_session and committed.nodes["requirement_analysis"].result.summary)
 
+    def test_revert_to_turn(self) -> None:
+        project = Path(__file__).resolve().parents[1]
+        workflow = project / "examples" / "workflows" / "simple_foundation.json"
+        workspace = project / ".test-workspace" / uuid4().hex
+        workspace.mkdir(parents=True, exist_ok=True)
+        store = WorkflowStore(workspace)
+        store.init()
+        runner = WorkflowRunner(store, skill_dirs=[project / "examples" / "skills"])
+        state = runner.start(workflow, until_node="requirement_analysis")
+        run_dir = store.get_run_dir(state.run_id)
+
+        turn1_content = store.read_artifact_ref(run_dir, state.nodes["requirement_analysis"].artifact or "")
+        state = runner.iterate_node(state.run_id, "requirement_analysis", "Add protocol section.")
+        turn2_content = store.read_artifact_ref(run_dir, state.nodes["requirement_analysis"].artifact or "")
+        self.assertNotEqual(turn1_content, turn2_content)
+
+        state = runner.revert_session_turn(state.run_id, "requirement_analysis", 1)
+        reverted = store.read_artifact_ref(run_dir, state.nodes["requirement_analysis"].artifact or "")
+        self.assertEqual(reverted, turn1_content)
+
+        sessions = NodeSessionStore(store)
+        session = sessions.load_session(run_dir, "requirement_analysis")
+        assert session is not None
+        self.assertEqual(session.turn, 1)
+        self.assertEqual(session.status, "iterating")
+        self.assertEqual(len(sessions.list_turns(run_dir, "requirement_analysis")), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

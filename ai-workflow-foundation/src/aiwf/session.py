@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .execution_result import build_execution_result, synthesize_from_artifact
+from .execution_result import build_execution_result, normalize_artifact_ref, synthesize_from_artifact
 from .models import ChangeItem, ExecutionResult, JsonDict, NodeRunState, NodeSpec, RunState, SkillSpec
 
 
@@ -127,6 +129,9 @@ class NodeSessionStore:
     def turns_dir(self, run_dir: Path, node_id: str) -> Path:
         return self.session_dir(run_dir, node_id) / "turns"
 
+    def snapshot_dir(self, run_dir: Path, node_id: str, turn: int) -> Path:
+        return self.session_dir(run_dir, node_id) / "snapshots" / f"turn_{turn:03d}"
+
     def load_session(self, run_dir: Path, node_id: str) -> NodeSession | None:
         path = self.session_path(run_dir, node_id)
         if not path.exists():
@@ -159,6 +164,62 @@ class NodeSessionStore:
         for path in sorted(turns_dir.glob("turn_*.json")):
             turns.append(SessionTurn.from_dict(self.store.read_json(path)))
         return turns
+
+    def save_turn_snapshot(self, run_dir: Path, node_id: str, turn: int, result: ExecutionResult) -> None:
+        snap_dir = self.snapshot_dir(run_dir, node_id, turn)
+        if snap_dir.exists():
+            shutil.rmtree(snap_dir)
+        snap_dir.mkdir(parents=True, exist_ok=True)
+        for asset in result.assets:
+            ref = normalize_artifact_ref(asset.ref)
+            src = run_dir / ref
+            if not src.is_file():
+                continue
+            rel = Path(ref).relative_to("artifacts")
+            dest = snap_dir / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+
+    def restore_turn_snapshot(self, run_dir: Path, node_id: str, turn: int) -> None:
+        snap_dir = self.snapshot_dir(run_dir, node_id, turn)
+        if not snap_dir.is_dir():
+            raise FileNotFoundError(f"No snapshot for turn {turn} on node {node_id}")
+        for path in snap_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(snap_dir)
+            dest = run_dir / "artifacts" / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+
+    def _refresh_result_assets(self, run_dir: Path, result: ExecutionResult) -> ExecutionResult:
+        from .models import AssetRecord
+
+        assets: list[AssetRecord] = []
+        for asset in result.assets:
+            ref = normalize_artifact_ref(asset.ref)
+            path = run_dir / ref
+            size = 0
+            sha = ""
+            if path.is_file():
+                data = path.read_bytes()
+                size = len(data)
+                sha = hashlib.sha256(data).hexdigest()
+            assets.append(
+                AssetRecord(
+                    ref=ref,
+                    kind=asset.kind,
+                    action=asset.action,
+                    size=size,
+                    sha256=sha,
+                )
+            )
+        return ExecutionResult(
+            summary=result.summary,
+            assets=assets,
+            changes=result.changes,
+            primary_ref=result.primary_ref,
+        )
 
     def max_turns_for(self, node: NodeSpec) -> int:
         iteration = node.params.get("iteration", {}) if node.params else {}
@@ -200,6 +261,7 @@ class NodeSessionStore:
                 finished_at=node_state.finished_at,
             ),
         )
+        self.save_turn_snapshot(run_dir, node.id, 1, result)
         return session
 
     def open_or_get_session(
@@ -250,6 +312,7 @@ class NodeSessionStore:
             finished_at=self.store.now(),
         )
         self.save_turn(run_dir, node.id, turn)
+        self.save_turn_snapshot(run_dir, node.id, next_turn, result)
         session.turn = next_turn
         session.updated_at = self.store.now()
         self.save_session(run_dir, session)
@@ -283,6 +346,46 @@ class NodeSessionStore:
         self.save_session(run_dir, session)
         self.store.write_node_result(run_dir, node_id, committed)
         return committed
+
+    def revert_to_turn(self, run_dir: Path, node_id: str, target_turn: int) -> ExecutionResult:
+        session = self.load_session(run_dir, node_id)
+        if session is None:
+            raise FileNotFoundError(f"No session for node: {node_id}")
+        if target_turn < 1 or target_turn > session.turn:
+            raise ValueError(f"Invalid revert target turn: {target_turn}")
+        target = self.load_turn(run_dir, node_id, target_turn)
+        if target is None:
+            raise ValueError(f"Turn not found: {target_turn}")
+
+        self.restore_turn_snapshot(run_dir, node_id, target_turn)
+
+        for turn in self.list_turns(run_dir, node_id):
+            if turn.turn <= target_turn:
+                continue
+            turn_path = self.turns_dir(run_dir, node_id) / f"turn_{turn.turn:03d}.json"
+            turn_path.unlink(missing_ok=True)
+            snap_path = self.snapshot_dir(run_dir, node_id, turn.turn)
+            if snap_path.exists():
+                shutil.rmtree(snap_path)
+
+        session.turn = target_turn
+        session.status = "iterating"
+        session.committed_at = None
+        session.updated_at = self.store.now()
+        self.save_session(run_dir, session)
+
+        changes = self.aggregate_changelist(run_dir, node_id)
+        result = self._refresh_result_assets(
+            run_dir,
+            ExecutionResult(
+                summary=target.result.summary,
+                assets=target.result.assets,
+                changes=changes,
+                primary_ref=target.result.primary_ref,
+            ),
+        )
+        self.store.write_node_result(run_dir, node_id, result)
+        return result
 
     def build_session_context(
         self,
