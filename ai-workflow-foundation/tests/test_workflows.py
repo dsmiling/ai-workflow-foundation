@@ -42,6 +42,31 @@ class WorkflowCatalogTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             delete_workflow(self.store, "saved_demo")
 
+    def test_save_single_node_workflow(self) -> None:
+        workflow = {
+            "id": "single_node_demo",
+            "name": "Single Node Demo",
+            "initial": "only",
+            "transitions": [],
+            "nodes": [
+                {
+                    "id": "only",
+                    "name": "Only Node",
+                    "type": "ai",
+                    "skill": "requirement_analysis",
+                    "inputs": {"raw_requirement": "Create a one-node workflow."},
+                    "outputs": {"primary": "requirement_analysis.md"},
+                    "approval": {"mode": "auto", "level": "optional"},
+                }
+            ],
+        }
+        saved = save_workflow(self.store, workflow, self.skills)
+        self.assertTrue(saved["editable"])
+        payload = get_workflow(self.store, "single_node_demo")
+        self.assertEqual(len(payload["workflow"]["nodes"]), 1)
+        self.assertEqual(payload["workflow"]["initial"], "only")
+
+        delete_workflow(self.store, "single_node_demo")
 
 if __name__ == "__main__":
     unittest.main()

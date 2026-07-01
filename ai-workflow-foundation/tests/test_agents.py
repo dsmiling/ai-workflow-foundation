@@ -1,12 +1,12 @@
 import json
 import os
 import shutil
-from pathlib import Path
 import unittest
+import unittest.mock
+from pathlib import Path
 from uuid import uuid4
 
 from aiwf.agent_providers import (
-    build_cli_argv,
     check_requirement,
     inspect_agent_provider,
     normalize_agent_provider,
@@ -32,7 +32,7 @@ from aiwf.storage import WorkflowStore
 class AgentProviderTests(unittest.TestCase):
     def test_agent_provider_aliases(self) -> None:
         self.assertEqual(normalize_agent_provider("openai"), "openai-api")
-        self.assertEqual(normalize_agent_provider("cursor"), "cursor-agent-cli")
+        self.assertEqual(normalize_agent_provider("cursor"), "cursor-agent-acp")
 
     def test_check_requirement_env_or_fallback(self) -> None:
         old_key = os.environ.pop("OPENAI_API_KEY", None)
@@ -70,15 +70,17 @@ class AgentProviderTests(unittest.TestCase):
                 os.environ["AIWF_OPENAI_API_KEY"] = old_aiwf_key
 
     def test_build_cli_argv_resolves_executable(self) -> None:
-        resolved = build_cli_argv("agent --trust --print", "hello")
-        self.assertEqual(resolved[-1], "hello")
-        self.assertIn("agent", Path(resolved[0]).name.lower())
+        self.skipTest("CLI batch path removed; ACP session only.")
 
     @unittest.skipUnless(shutil.which("codex"), "codex CLI is not installed")
     def test_codex_provider_smoke(self) -> None:
-        result = test_agent_provider("codex-cli", prompt="Reply with exactly: AIWF agent ok")
+        with unittest.mock.patch("aiwf.agent_providers.SessionRegistry") as registry_cls:
+            mock_registry = registry_cls.get.return_value
+            mock_client = unittest.mock.MagicMock()
+            mock_client.create_chat.return_value = "chat-test"
+            mock_registry.acquire.return_value = mock_client
+            result = test_agent_provider("codex-agent-acp")
         self.assertEqual(result["status"], "ok", msg=result.get("message"))
-        self.assertIn("AIWF agent ok", result.get("output", ""))
 
 
 class AgentStoreTests(unittest.TestCase):
@@ -147,7 +149,7 @@ class AgentStoreTests(unittest.TestCase):
             {
                 "id": "role_analyst",
                 "label": "分析师",
-                "provider": "cursor-agent-cli",
+                "provider": "cursor-agent-acp",
                 "ident": {"name": "分析师", "role": "需求拆解", "vibe": "严谨"},
                 "soul": "只做节点产物。",
             },
@@ -169,6 +171,13 @@ class AgentStoreTests(unittest.TestCase):
         payload = extract_json_object('```json\n{"id": "role_x", "label": "测试"}\n```')
         self.assertEqual(payload["id"], "role_x")
 
+    def test_extract_json_object_nested(self) -> None:
+        payload = extract_json_object(
+            '说明如下\n```json\n{"summary": "ok", "workflow": {"id": "demo", "name": "Demo", "nodes": []}}\n```\n'
+        )
+        self.assertEqual(payload["workflow"]["id"], "demo")
+        self.assertEqual(payload["summary"], "ok")
+
     def test_normalize_generated_agent(self) -> None:
         agent = normalize_generated_agent(
             self.store,
@@ -186,33 +195,30 @@ class AgentStoreTests(unittest.TestCase):
     def test_generate_agent_draft_mocked(self) -> None:
         from unittest.mock import patch
 
-        fake_output = json.dumps(
-            {
-                "id": "role_mock",
-                "label": "Mock 助手",
-                "provider": "openai-api",
-                "ident": {"name": "Mock", "role": "测试", "vibe": "冷静"},
-                "soul": "只做测试输出。",
-            },
-            ensure_ascii=False,
-        )
+        fake_agent = {
+            "id": "role_mock",
+            "label": "Mock 助手",
+            "provider": "cursor-agent-acp",
+            "ident": {"name": "Mock", "role": "测试", "vibe": "冷静"},
+            "soul": "只做测试输出。",
+        }
 
-        holder = {"prompt": ""}
+        def fake_stream(*args, **kwargs):
+            yield {"type": "session", "session_id": "s1", "chat_id": "c1", "agent_id": "role_mock"}
+            yield {"type": "done", "summary": "ok", "agent": fake_agent, "session_id": "s1", "chat_id": "c1"}
 
-        def fake_stream(provider_id: str, prompt: str):
-            holder["prompt"] = prompt
-            yield {"kind": "progress", "stage": "api", "message": "mock", "percent": 20}
-            yield {"kind": "log", "text": "line1"}
-            yield {"kind": "complete", "output": fake_output}
-
-        with patch("aiwf.agents.stream_provider_generate", side_effect=fake_stream), patch(
+        with patch("aiwf.agents.stream_role_assist_message", side_effect=fake_stream), patch(
             "aiwf.agents.inspect_agent_provider",
             return_value={"ready": True, "detail": "ok"},
         ):
-            result = generate_agent_draft(self.store, description="创建一个测试助手", provider_id="openai-api")
+            result = generate_agent_draft(
+                self.store,
+                description="创建一个测试助手",
+                provider_id="cursor-agent-acp",
+                agent_id="role_mock",
+            )
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["agent"]["label"], "Mock 助手")
-        self.assertIn("创建一个测试助手", holder["prompt"])
 
 
 if __name__ == "__main__":

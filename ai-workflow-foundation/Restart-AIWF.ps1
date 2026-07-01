@@ -14,9 +14,9 @@ function Stop-AiwfProcesses {
     $connections = netstat -ano | Select-String "127\.0\.0\.1:(876[5-9]|877[0-9]|878[0-4]).*LISTENING"
     foreach ($line in $connections) {
         $parts = ($line -replace "\s+", " ").Trim().Split(" ")
-        $pid = $parts[-1]
-        if ($pid -match "^\d+$") {
-            Stop-Process -Id ([int]$pid) -Force -ErrorAction SilentlyContinue
+        $processId = $parts[-1]
+        if ($processId -match "^\d+$") {
+            Stop-Process -Id ([int]$processId) -Force -ErrorAction SilentlyContinue
         }
     }
 }

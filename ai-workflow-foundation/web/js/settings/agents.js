@@ -16,6 +16,22 @@ let agentTemplates = [];
 let agentGenerateHistory = [];
 let agentGenerateLastAgent = null;
 let agentGenerateRunning = false;
+const agentSessionByAgentId = new Map();
+
+function currentAgentSession() {
+  const agentId = $("roleAgentId")?.value?.trim() || settingsState.roleEditorSourceId || "";
+  if (!agentId) return { session_id: "", chat_id: "" };
+  return agentSessionByAgentId.get(agentId) || { session_id: "", chat_id: "" };
+}
+
+function rememberAgentSession(agentId, sessionId, chatId) {
+  if (!agentId) return;
+  const existing = agentSessionByAgentId.get(agentId) || {};
+  agentSessionByAgentId.set(agentId, {
+    session_id: sessionId || existing.session_id || "",
+    chat_id: chatId || existing.chat_id || "",
+  });
+}
 
 export function agentStatusLabel(agent) {
   if (!agent) return "";
@@ -30,6 +46,10 @@ function providers() {
   return settingsState.agentCatalog.filter((item) => item.tier === "provider" || item.source === "builtin");
 }
 
+function acpProviders() {
+  return providers().filter((item) => item.kind === "cli-session");
+}
+
 function countRolesForProvider(providerId) {
   return roleAgents().filter((item) => item.provider === providerId).length;
 }
@@ -39,7 +59,7 @@ function blankRole() {
   return {
     id: `role_custom_${suffix}`,
     label: "新助手",
-    provider: providers()[0]?.id || "cursor-agent-cli",
+    provider: providers()[0]?.id || "cursor-agent-acp",
     ident: { name: "", role: "", vibe: "" },
     soul: "",
   };
@@ -276,7 +296,7 @@ function duplicateCurrentRole() {
     {
       id: `${sourceId}_${suffix}`,
       label: `${agent.label || sourceId} 副本`,
-      provider: agent.provider || providers()[0]?.id || "cursor-agent-cli",
+      provider: agent.provider || providers()[0]?.id || "cursor-agent-acp",
       ident: { ...(agent.ident || {}) },
       soul: agent.soul || agent.description || "",
     },
@@ -305,7 +325,7 @@ function populateRoleProviderSelect() {
   for (const item of providers()) {
     const option = document.createElement("option");
     option.value = item.provider || item.id;
-    option.textContent = `${item.label} · ${item.kind === "cli" ? "CLI" : "API"}`;
+    option.textContent = `${item.label} · ${item.kind === "cli-session" ? "ACP" : item.kind === "cli" ? "CLI" : "API"}`;
     select.appendChild(option);
   }
 }
@@ -429,6 +449,8 @@ async function sendAgentGenerateMessage() {
   $("agentGenerateLog").textContent = "";
   setAgentGenerateProgress(5, "准备生成...");
   const draft = collectRoleDraftPayload();
+  const agentId = draft.id || $("roleAgentId")?.value?.trim() || "";
+  const session = currentAgentSession();
   let streamPercent = 5;
   try {
     const response = await fetch("/agents/generate/stream", {
@@ -438,11 +460,15 @@ async function sendAgentGenerateMessage() {
         description,
         provider: $("agentGenerateProvider").value,
         draft,
+        agent_id: agentId || undefined,
+        session_id: session.session_id || undefined,
         messages: agentGenerateHistory,
       }),
     });
     await consumeAgentGenerateStream(response, (event) => {
-      if (event.type === "progress") {
+      if (event.type === "session") {
+        rememberAgentSession(event.agent_id || agentId, event.session_id, event.chat_id);
+      } else if (event.type === "progress") {
         streamPercent = Number(event.percent) || streamPercent;
         setAgentGenerateProgress(streamPercent, event.message);
       } else if (event.type === "log") {
@@ -476,16 +502,16 @@ function populateAgentGenerateProviderSelect() {
   const select = $("agentGenerateProvider");
   if (!select) return;
   select.innerHTML = "";
-  for (const item of providers()) {
+  for (const item of acpProviders()) {
     const option = document.createElement("option");
     option.value = item.provider || item.id;
     const status = item.ready ? "就绪" : "缺配置";
-    option.textContent = `${item.label} · ${item.kind === "cli" ? "CLI" : "API"} (${status})`;
+    option.textContent = `${item.label} · ${item.kind === "cli-session" ? "ACP" : item.kind === "cli" ? "CLI" : "API"} (${status})`;
     select.appendChild(option);
   }
-  const preferred = providers().find((item) => item.id === "cursor-agent-cli" && item.ready)
-    || providers().find((item) => item.ready)
-    || providers()[0];
+  const preferred = acpProviders().find((item) => item.id === "cursor-agent-acp" && item.ready)
+    || acpProviders().find((item) => item.ready)
+    || acpProviders()[0];
   if (preferred) {
     select.value = preferred.provider || preferred.id;
   }
@@ -667,7 +693,7 @@ function applyTemplateToCreateForm() {
   openCreateRole({
     id: `role_${template.template_id}_${suffix}`,
     label: template.label || template.template_id,
-    provider: template.provider || "cursor-agent-cli",
+    provider: template.provider || "cursor-agent-acp",
     ident: { ...(template.ident || {}) },
     soul: template.soul || "",
   });

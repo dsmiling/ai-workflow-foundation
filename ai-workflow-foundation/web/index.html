@@ -36,8 +36,9 @@
           </div>
         </div>
 
-        <div class="workflow-shell">
-          <aside class="context-panel">
+        <div class="workflow-shell-viewport" id="workflowShellViewport">
+          <div class="workflow-shell" id="workflowShell">
+          <aside class="context-panel workflow-shell-column" data-shell-col="context">
             <div class="context-title">工作台</div>
             <button class="context-tab" data-workflow-view="workflows">
               <span>工作流</span>
@@ -53,7 +54,16 @@
             </button>
           </aside>
 
-          <div class="stage">
+          <div
+            class="workflow-shell-handle"
+            data-resize-pair="context-stage"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整工作台与编排区宽度"
+            tabindex="0"
+          ></div>
+
+          <div class="stage workflow-shell-column" data-shell-col="stage">
             <div class="workflow-view" data-view-panel="workflows">
               <div class="stage-head">
                 <div>
@@ -119,7 +129,16 @@
             </div>
           </div>
 
-          <aside class="inspector">
+          <div
+            class="workflow-shell-handle"
+            data-resize-pair="stage-inspector"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整编排区与详情区宽度"
+            tabindex="0"
+          ></div>
+
+          <aside class="inspector workflow-shell-column" data-shell-col="inspector">
             <div class="inspector-head">
               <h2 id="inspectorTitle">节点详情</h2>
               <div class="muted" id="inspectorSubtitle">编辑当前选中的节点。</div>
@@ -333,6 +352,85 @@
               </div>
             </div>
           </aside>
+
+          <div
+            class="workflow-shell-handle"
+            data-resize-pair="inspector-assist"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整详情区与助手区宽度"
+            tabindex="0"
+          ></div>
+
+          <aside class="workflow-assist-panel workflow-shell-column" id="workflowAssistPanel" data-shell-col="assist">
+            <div class="workflow-assist-head">
+              <div class="workflow-assist-head-main">
+                <h3>工作流助手</h3>
+                <div class="workflow-assist-focus muted" id="workflowAssistFocus">焦点：未选中节点</div>
+              </div>
+            </div>
+            <div class="workflow-assist-body">
+              <div class="workflow-assist-progress-bar">
+                <div class="workflow-assist-progress-fill" id="workflowAssistProgressFill"></div>
+              </div>
+              <div class="workflow-assist-status">
+                <div class="muted workflow-assist-progress-label" id="workflowAssistProgressLabel">描述要如何修改工作流；可用 @节点id 指定焦点。</div>
+                <div class="workflow-assist-error" id="workflowAssistError" hidden></div>
+              </div>
+              <div class="workflow-assist-chat" id="workflowAssistChat"></div>
+              <pre class="workflow-assist-log" id="workflowAssistLog" hidden aria-hidden="true"></pre>
+              <div class="workflow-assist-composer">
+                <div class="workflow-assist-mention-host">
+                  <textarea
+                    id="workflowAssistInput"
+                    rows="3"
+                  ></textarea>
+                  <div class="workflow-assist-mention-menu" id="workflowAssistMentionMenu" hidden></div>
+                </div>
+                <div class="workflow-assist-attachment-list" id="workflowAssistAttachmentList" hidden></div>
+                <div class="workflow-assist-toolbar">
+                  <div class="workflow-assist-toolbar-meta">
+                    <div class="muted workflow-assist-context-meta" id="workflowAssistContextMeta">上下文 0 条</div>
+                  </div>
+                  <div class="workflow-assist-toolbar-row">
+                    <div class="workflow-assist-toolbar-start">
+                      <button type="button" class="workflow-assist-tool-btn workflow-assist-icon-btn" id="workflowAssistAttachBtn" aria-label="添加附件" title="添加附件">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                          <path d="M8 3v10M3 8h10" />
+                        </svg>
+                      </button>
+                      <input type="file" id="workflowAssistFileInput" hidden multiple>
+                      <label class="workflow-assist-toolbar-label" for="workflowAssistProvider">模型</label>
+                      <select id="workflowAssistProvider"></select>
+                    </div>
+                    <div class="workflow-assist-toolbar-end">
+                    <button type="button" class="ghost workflow-assist-clear-btn workflow-assist-icon-btn" id="workflowAssistClearBtn" aria-label="清空历史" title="清空历史">
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M3.5 4.5h9M6.5 2.5h3M5 4.5v8m3-8v8m3-8v8M4.5 4.5l.4 8.2a1 1 0 0 0 1 .8h4.2a1 1 0 0 0 1-.8l.4-8.2" />
+                      </svg>
+                    </button>
+                    <button type="button" class="primary workflow-assist-send-btn workflow-assist-icon-btn" id="workflowAssistSendBtn" aria-label="发送" title="发送">
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M3 8h8M8 3l5 5-5 5" />
+                      </svg>
+                    </button>
+                  </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="workflow-assist-preview" id="workflowAssistPreview" hidden>
+              <div class="workflow-assist-preview-title">待应用草稿</div>
+              <div class="workflow-assist-preview-summary" id="workflowAssistPreviewSummary" aria-label="结构变更"></div>
+              <div class="muted" id="workflowAssistPreviewMeta"></div>
+              <div class="workflow-assist-preview-actions">
+                <button type="button" class="primary" id="workflowAssistApplyBtn" disabled>应用</button>
+                <button type="button" id="workflowAssistDiscardBtn" disabled>丢弃</button>
+                <button type="button" id="workflowAssistUndoBtn" disabled>撤销</button>
+              </div>
+            </div>
+          </aside>
+          </div>
         </div>
       </div>
 

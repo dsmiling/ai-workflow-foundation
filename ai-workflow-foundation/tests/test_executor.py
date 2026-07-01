@@ -26,7 +26,7 @@ class ExecutorTests(unittest.TestCase):
 
     def test_agent_provider_aliases(self) -> None:
         self.assertEqual(normalize_agent_provider("openai"), "openai-api")
-        self.assertEqual(normalize_agent_provider("cursor"), "cursor-agent-cli")
+        self.assertEqual(normalize_agent_provider("cursor"), "cursor-agent-acp")
 
     def test_prompt_contains_skill_inputs_and_feedback(self) -> None:
         node = NodeSpec.from_dict(

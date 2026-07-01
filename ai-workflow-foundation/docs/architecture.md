@@ -20,8 +20,25 @@ CLI / built-in Web UI
       -> Executor Adapter
       -> MockAIExecutor
       -> OpenAICompatibleExecutor
-      -> Agent / AI Harness / OpenClaw later
+      -> CliAcpClient (cursor-agent-acp / codex-agent-acp)
 ```
+
+## CLI Agent Providers (ACP Session)
+
+CLI providers use **Agent Client Protocol** over stdio (JSON-RPC NDJSON):
+
+- `cursor-agent-acp` — `agent acp` (Windows: PowerShell → `cursor-agent.ps1 acp`)
+- `codex-agent-acp` — `codex app-server` (override via `AIWF_CODEX_ACP_CMD`)
+
+Session layers:
+
+| Layer | Scope | Workspace |
+|-------|-------|-----------|
+| L0 Role | `agent_id` | `.aiwf/agents/assist/<session>/` |
+| L1 Assist | `workflow_id` | `.aiwf/assist/<session>/` |
+| L2/L3 Node | `run_id:node_id` | run dir + `node_sessions/<node_id>/session.json` |
+
+API providers (`openai-api`, etc.) remain one-shot HTTP `generate()`.
 
 ## File Layout
 

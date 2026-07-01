@@ -39,6 +39,8 @@ class NodeSession:
     committed_at: str | None = None
     created_at: str = ""
     updated_at: str = ""
+    acp_chat_id: str | None = None
+    acp_provider_id: str | None = None
 
     def to_dict(self) -> JsonDict:
         payload: JsonDict = {
@@ -55,6 +57,10 @@ class NodeSession:
             payload["skill_override"] = self.skill_override
         if self.committed_at:
             payload["committed_at"] = self.committed_at
+        if self.acp_chat_id:
+            payload["acp_chat_id"] = self.acp_chat_id
+        if self.acp_provider_id:
+            payload["acp_provider_id"] = self.acp_provider_id
         return payload
 
     @classmethod
@@ -69,6 +75,8 @@ class NodeSession:
             committed_at=data.get("committed_at"),
             created_at=str(data.get("created_at", "")),
             updated_at=str(data.get("updated_at", "")),
+            acp_chat_id=str(data["acp_chat_id"]) if data.get("acp_chat_id") else None,
+            acp_provider_id=str(data["acp_provider_id"]) if data.get("acp_provider_id") else None,
         )
 
 

@@ -30,6 +30,15 @@
       "name": "Module Mapping",
       "type": "ai",
       "skill": "module_mapping",
+      "params": {
+        "unity_context": {
+          "active_scene": true,
+          "scene_hierarchy_depth": 3,
+          "prefab_filter": "t:Prefab",
+          "prefab_max": 5,
+          "required": false
+        }
+      },
       "inputs": {
         "requirement": "artifact.requirement_analysis"
       },

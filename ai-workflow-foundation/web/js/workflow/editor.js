@@ -8,6 +8,7 @@ import { currentNode, syncNodeFormToWorkflow } from "./node-form.js";
 import { syncNodeTestToWorkflow } from "../core/executors.js";
 import { renderNodeForm } from "./node-form.js";
 import { renderNodeInspector } from "./inspector.js";
+import { renderAssistFocusChips } from "./assist.js";
 
 export function selectNode(index) {
   if (workflowState.nodeEditOpen) syncNodeFormToWorkflow();
@@ -17,6 +18,7 @@ export function selectNode(index) {
   renderNodeForm();
   renderEditorNodes();
   renderNodeInspector();
+  renderAssistFocusChips();
 }
 
 export function openNodeEditor(index = workflowState.selectedNodeIndex) {
@@ -27,6 +29,7 @@ export function openNodeEditor(index = workflowState.selectedNodeIndex) {
   renderEditorNodes();
   renderNodeForm();
   renderNodeInspector();
+  renderAssistFocusChips();
 }
 
 export function renderRunLiveBanner() {

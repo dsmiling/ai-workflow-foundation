@@ -5,14 +5,16 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from .agent_providers import (
     AGENT_PROVIDER_SPECS,
     inspect_agent_provider,
+    is_acp_provider,
     normalize_agent_provider,
-    stream_provider_generate,
     test_agent_provider,
 )
+from .agent_assist_workspace import stream_role_assist_message
 from .storage import WorkflowStore
 
 JsonDict = dict[str, Any]
@@ -260,27 +262,68 @@ def run_agent_test(store: WorkflowStore, agent_id: str, prompt: str | None = Non
     }
 
 
+def _balanced_json_span(text: str, start: int = 0) -> tuple[int, int] | None:
+    idx = text.find("{", start)
+    while idx >= 0:
+        depth = 0
+        in_string = False
+        escape = False
+        for pos in range(idx, len(text)):
+            ch = text[pos]
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return idx, pos
+        idx = text.find("{", idx + 1)
+    return None
+
+
+def _load_json_dict(candidate: str) -> JsonDict | None:
+    try:
+        data = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def extract_json_object(text: str) -> JsonDict:
     content = text.strip()
     if not content:
         raise ValueError("LLM response was empty.")
-    try:
-        data = json.loads(content)
-        if isinstance(data, dict):
-            return data
-    except json.JSONDecodeError:
-        pass
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL | re.IGNORECASE)
-    if fenced:
-        data = json.loads(fenced.group(1))
-        if isinstance(data, dict):
-            return data
-    start = content.find("{")
-    end = content.rfind("}")
-    if start >= 0 and end > start:
-        data = json.loads(content[start : end + 1])
-        if isinstance(data, dict):
-            return data
+    direct = _load_json_dict(content)
+    if direct is not None:
+        return direct
+    for match in re.finditer(r"```(?:json)?\s*\n?(.*?)```", content, re.DOTALL | re.IGNORECASE):
+        block = match.group(1).strip()
+        block_direct = _load_json_dict(block)
+        if block_direct is not None:
+            return block_direct
+        span = _balanced_json_span(block)
+        if span is not None:
+            parsed = _load_json_dict(block[span[0] : span[1] + 1])
+            if parsed is not None:
+                return parsed
+    search_from = 0
+    while True:
+        span = _balanced_json_span(content, search_from)
+        if span is None:
+            break
+        parsed = _load_json_dict(content[span[0] : span[1] + 1])
+        if parsed is not None:
+            return parsed
+        search_from = span[0] + 1
     raise ValueError("LLM response did not contain a JSON object.")
 
 
@@ -463,65 +506,61 @@ def stream_agent_generate(
     provider_id: str | None = None,
     draft: JsonDict | None = None,
     messages: list[JsonDict] | None = None,
+    agent_id: str | None = None,
+    session_id: str | None = None,
 ) -> Iterator[JsonDict]:
     text = description.strip()
     if not text:
         raise ValueError("description is required.")
-    provider = normalize_agent_provider(provider_id or "cursor-agent-cli")
+    provider = normalize_agent_provider(provider_id or "cursor-agent-acp")
+    if not is_acp_provider(provider):
+        raise ValueError("Role Agent 生成仅支持 cursor-agent-acp 或 codex-agent-acp。")
     inspection = inspect_agent_provider(provider)
     if not inspection["ready"]:
         raise ValueError(str(inspection["detail"]))
     draft_payload = normalize_generate_draft(draft)
-    history = normalize_generate_messages(messages)
-    refine = bool(draft_payload) or len(history) > 1
+    refine = bool(draft_payload) or bool(normalize_generate_messages(messages))
+    role_id = (agent_id or str(draft_payload.get("id") or "")).strip() or f"role_{uuid4().hex[:8]}"
     yield {
         "type": "progress",
         "stage": "prepare",
-        "message": "构建 prompt...",
+        "message": "准备 Role ACP 会话...",
         "percent": 8,
     }
-    prompt = build_generate_agent_prompt(
-        text,
-        provider,
-        _example_payload(store),
+    for event in stream_role_assist_message(
+        store,
+        agent_id=role_id,
+        provider_id=provider,
+        description=text,
         draft=draft_payload or None,
-        messages=history or None,
-    )
-    yield {
-        "type": "progress",
-        "stage": "llm",
-        "message": "连接层生成中...",
-        "percent": 15,
-    }
-    output = ""
-    for event in stream_provider_generate(provider, prompt):
-        kind = str(event.get("kind") or "")
-        if kind == "progress":
+        session_id=session_id,
+    ):
+        if event.get("type") == "session":
+            yield event
+            continue
+        if event.get("type") == "log":
+            yield event
+            continue
+        if event.get("type") == "progress":
+            yield event
+            continue
+        if event.get("type") == "done":
+            raw = event.get("agent")
+            if not isinstance(raw, dict):
+                raise ValueError("role.json was not produced.")
+            agent = normalize_generated_agent(store, raw, provider, draft=draft_payload, refine=refine)
+            summary = str(event.get("summary") or "已生成助手草稿。")
             yield {
-                "type": "progress",
-                "stage": str(event.get("stage") or "llm"),
-                "message": str(event.get("message") or "生成中..."),
-                "percent": int(event.get("percent") or 20),
+                "type": "done",
+                "message": summary,
+                "summary": summary,
+                "agent": agent,
+                "session_id": event.get("session_id"),
+                "chat_id": event.get("chat_id"),
+                "percent": 100,
             }
-        elif kind == "log":
-            yield {"type": "log", "line": str(event.get("text") or "")}
-        elif kind == "complete":
-            output = str(event.get("output") or "")
-    yield {
-        "type": "progress",
-        "stage": "parse",
-        "message": "解析 JSON...",
-        "percent": 92,
-    }
-    raw = extract_json_object(output)
-    agent = normalize_generated_agent(store, raw, provider, draft=draft_payload, refine=refine)
-    yield {
-        "type": "done",
-        "message": "已生成助手草稿。",
-        "agent": agent,
-        "output": output,
-        "percent": 100,
-    }
+            return
+    raise RuntimeError("Role assist stream ended without done event.")
 
 
 def generate_agent_draft(
@@ -531,6 +570,8 @@ def generate_agent_draft(
     provider_id: str | None = None,
     draft: JsonDict | None = None,
     messages: list[JsonDict] | None = None,
+    agent_id: str | None = None,
+    session_id: str | None = None,
 ) -> JsonDict:
     result: JsonDict | None = None
     for event in stream_agent_generate(
@@ -539,6 +580,8 @@ def generate_agent_draft(
         provider_id=provider_id,
         draft=draft,
         messages=messages,
+        agent_id=agent_id,
+        session_id=session_id,
     ):
         if event.get("type") == "done":
             result = event

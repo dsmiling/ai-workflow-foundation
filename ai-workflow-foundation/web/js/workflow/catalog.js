@@ -2,11 +2,13 @@ import { $ } from "../core/dom.js";
 import { escapeHtml } from "../core/dom.js";
 import { api } from "../core/api.js";
 import { setLog } from "../core/log.js";
+import { settingsState } from "../settings/state.js";
 import { workflowState } from "./state.js";
 import { renderWorkflowInspector, renderNodeInspector, setWorkflowView } from "./inspector.js";
 import { renderEditorNodes } from "./editor.js";
-import { currentNode, syncNodeFormToWorkflow } from "./node-form.js";
+import { currentNode, renderNodeForm, syncNodeFormToWorkflow } from "./node-form.js";
 import { syncNodeTestToWorkflow } from "../core/executors.js";
+import { migrateWorkflowAssistState, syncWorkflowAssistContext } from "./assist.js";
 
 export function syncLinearTransitions() {
   const nodeIds = (workflowState.editingWorkflow.nodes || []).map((node) => node.id).filter(Boolean);
@@ -19,18 +21,26 @@ export function syncLinearTransitions() {
   workflowState.editingWorkflow.transitions = [...linear, ...custom];
 }
 
+function pickDefaultSkillId() {
+  const skills = settingsState.skillCatalog || [];
+  const workspaceSkill = skills.find((item) => item.source === "workspace");
+  const exampleSkill = skills.find((item) => item.source === "example");
+  return workspaceSkill?.id || exampleSkill?.id || skills[0]?.id || "";
+}
+
 export function defaultNode() {
   const id = `node_${workflowState.editingWorkflow.nodes.length + 1}`;
+  const skill = pickDefaultSkillId();
   return {
     id,
     name: `Node ${workflowState.editingWorkflow.nodes.length + 1}`,
     type: "ai",
-    skill: "",
+    skill,
     inputs: {},
     outputs: { primary: "output.md" },
-    approval: { mode: "human", level: "optional" },
+    approval: { mode: "auto", level: "optional" },
     review: {
-      mode: "human",
+      mode: "auto",
       level: "optional",
       inputs: { primary_output: `artifact.${id}` },
       criteria: "",
@@ -40,10 +50,33 @@ export function defaultNode() {
 }
 
 export function blankWorkflow() {
-  const workflow = { id: "new_workflow", name: "New Workflow", workspace_root: "", nodes: [defaultNode()], initial: "", transitions: [] };
+  const suffix = Date.now().toString().slice(-6);
+  const workflow = {
+    id: `workflow_${suffix}`,
+    name: "New Workflow",
+    workspace_root: "",
+    nodes: [defaultNode()],
+    initial: "",
+    transitions: [],
+  };
   workflowState.editingWorkflow = workflow;
   syncLinearTransitions();
   return workflowState.editingWorkflow;
+}
+
+export function validateWorkflowBeforeSave(workflow) {
+  const errors = [];
+  const workflowId = String(workflow?.id || "").trim();
+  if (!workflowId) errors.push("工作流 ID 不能为空");
+  const nodes = workflow?.nodes || [];
+  if (!nodes.length) errors.push("工作流至少需要一个节点");
+  for (const node of nodes) {
+    const nodeType = node?.type || "ai";
+    if ((nodeType === "ai" || nodeType === "skill") && !String(node?.skill || "").trim()) {
+      errors.push(`节点「${node?.name || node?.id || "?"}」需要绑定 Skill`);
+    }
+  }
+  return errors;
 }
 
 export function renderWorkflowCards() {
@@ -87,6 +120,43 @@ export function renderWorkflowCards() {
 export function updateWorkflowCounts() {
   $("nodeCount").textContent = String(workflowState.editingWorkflow.nodes?.length || 0);
   $("runStatusLabel").textContent = workflowState.currentState?.status || (workflowState.currentState?.run_id ? "loaded" : "idle");
+}
+
+function workspaceSourceLabel() {
+  if (!workflowState.currentWorkflowEditable) return "example";
+  return workflowState.currentWorkflowPath ? "workspace" : "workspace·未保存";
+}
+
+export function syncEditingWorkflowToolbar() {
+  const workflow = workflowState.editingWorkflow;
+  if (!workflow?.id) return;
+  const select = $("workflowSelect");
+  if (select) {
+    let option = [...select.options].find((item) => item.value === workflow.id);
+    const label = `${workflow.name || workflow.id} [${workspaceSourceLabel()}]`;
+    if (!option) {
+      option = document.createElement("option");
+      option.value = workflow.id;
+      select.insertBefore(option, select.firstChild);
+    }
+    option.textContent = label;
+    select.value = workflow.id;
+  }
+  const catalogItem = workflowState.workflowCatalog.find((item) => item.id === workflow.id);
+  if (catalogItem) {
+    catalogItem.name = workflow.name || workflow.id;
+  }
+  const meta = $("workflowMeta");
+  if (meta) {
+    if (!workflowState.currentWorkflowEditable) {
+      meta.textContent = "example · 只读示例";
+    } else if (workflowState.currentWorkflowPath) {
+      meta.textContent = `workspace · ${workflow.name || workflow.id}`;
+    } else {
+      meta.textContent = `workspace · ${workflow.name || workflow.id} · 未保存`;
+    }
+  }
+  renderWorkflowCards();
 }
 
 export async function refreshWorkflowCatalog(selectId) {
@@ -147,6 +217,7 @@ export async function loadWorkflowData(workflowId) {
   $("workflowSelect").value = workflowId;
   renderEditorNodes();
   renderNodeInspector();
+  await syncWorkflowAssistContext(workflowId);
   return payload;
 }
 
@@ -190,6 +261,48 @@ export async function openWorkflowNodes(workflowId = workflowState.editingWorkfl
   setWorkflowView("nodes");
 }
 
+export function cloneWorkflowToWorkspace() {
+  if (workflowState.workflowEditOpen) syncWorkflowFormToWorkflow();
+  if (workflowState.nodeEditOpen) syncNodeFormToWorkflow();
+  const previousId = workflowState.editingWorkflow?.id || "";
+  workflowState.editingWorkflow = JSON.parse(JSON.stringify(workflowState.editingWorkflow));
+  workflowState.editingWorkflow.id = `${workflowState.editingWorkflow.id}_copy`;
+  workflowState.editingWorkflow.name = `${workflowState.editingWorkflow.name} Copy`;
+  migrateWorkflowAssistState(previousId, workflowState.editingWorkflow.id);
+  workflowState.currentWorkflowEditable = true;
+  workflowState.currentWorkflowPath = "";
+  workflowState.selectedNodeIndex = 0;
+  workflowState.nodeEditOpen = false;
+  workflowState.workflowEditOpen = false;
+  $("wfId").readOnly = false;
+  populateWorkflowForm();
+  syncEditingWorkflowToolbar();
+  renderEditorNodes();
+  renderNodeInspector();
+  renderWorkflowInspector();
+  return workflowState.editingWorkflow;
+}
+
+export function applyWorkflowDraft(workflow, { selectedNodeId = "" } = {}) {
+  workflowState.editingWorkflow = JSON.parse(JSON.stringify(workflow));
+  syncLinearTransitions();
+  const nodes = workflowState.editingWorkflow.nodes || [];
+  if (selectedNodeId) {
+    const index = nodes.findIndex((node) => node.id === selectedNodeId);
+    workflowState.selectedNodeIndex = index >= 0 ? index : 0;
+  } else {
+    workflowState.selectedNodeIndex = Math.min(workflowState.selectedNodeIndex, Math.max(0, nodes.length - 1));
+  }
+  workflowState.nodeEditOpen = false;
+  populateWorkflowForm();
+  syncEditingWorkflowToolbar();
+  renderEditorNodes();
+  renderNodeForm();
+  renderWorkflowInspector();
+  renderNodeInspector();
+  updateWorkflowCounts();
+}
+
 export async function loadWorkflowForEdit(workflowId) {
   await selectWorkflow(workflowId);
 }
@@ -198,9 +311,14 @@ export async function saveWorkflow() {
   if (workflowState.workflowEditOpen) syncWorkflowFormToWorkflow();
   if (workflowState.nodeEditOpen) syncNodeFormToWorkflow();
   else syncNodeTestToWorkflow(currentNode());
+  syncLinearTransitions();
   workflowState.editingWorkflow.id = $("wfId").value.trim() || workflowState.editingWorkflow.id;
   workflowState.editingWorkflow.name = $("wfName").value.trim() || workflowState.editingWorkflow.name;
   workflowState.editingWorkflow.workspace_root = $("wfRoot").value.trim();
+  const validationErrors = validateWorkflowBeforeSave(workflowState.editingWorkflow);
+  if (validationErrors.length) {
+    throw new Error(validationErrors.join("；"));
+  }
   const method = workflowState.currentWorkflowEditable && workflowState.editingWorkflow.id === $("workflowSelect").value ? "PUT" : "POST";
   const path = method === "PUT"
     ? `/workflows/${encodeURIComponent(workflowState.editingWorkflow.id)}`

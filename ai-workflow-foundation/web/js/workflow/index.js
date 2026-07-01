@@ -4,6 +4,7 @@ import { setLog } from "../core/log.js";
 import { refreshSkillCatalog } from "../settings/skills.js";
 import {
   blankWorkflow,
+  cloneWorkflowToWorkspace,
   defaultNode,
   openWorkflowEditor,
   openWorkflowNodes,
@@ -30,6 +31,8 @@ import { applyDefaultExecutorControls, readGlobalExecutorPayload, refreshExecuto
 import { initNodeTestPanel, runNodeTest } from "./node-test.js";
 import { initNodeInputsEditor } from "./node-inputs-editor.js";
 import { initNodeIteratePanel, renderNodeIteratePanel } from "./node-iterate.js";
+import { initWorkflowAssist } from "./assist.js";
+import { initWorkflowShellLayout } from "./shell-layout.js";
 
 let outputsAdvancedMode = false;
 
@@ -59,35 +62,27 @@ export function initWorkflow() {
     workflowState.currentWorkflowEditable = true;
     workflowState.currentWorkflowPath = "";
     workflowState.selectedNodeIndex = 0;
-    workflowState.nodeEditOpen = false;
-    workflowState.workflowEditOpen = true;
+    workflowState.workflowEditOpen = false;
+    workflowState.nodeEditOpen = true;
     $("wfId").readOnly = false;
     $("workflowMeta").textContent = "workspace · 新建未保存";
     populateWorkflowForm();
     renderEditorNodes();
+    renderNodeForm();
     renderNodeInspector();
     renderWorkflowCards();
     renderWorkflowInspector();
-    setWorkflowView("workflows");
+    setWorkflowView("nodes");
+    const firstNode = workflowState.editingWorkflow.nodes?.[0];
+    if (firstNode?.skill) {
+      setLog(`已创建单节点工作流草稿，默认 Skill：${firstNode.skill}。保存前可继续编辑节点。`);
+    } else {
+      setLog("已创建单节点工作流草稿。请为节点选择 Skill 后再保存。");
+    }
   });
 
   $("cloneWorkflowBtn").addEventListener("click", async () => {
-    if (workflowState.workflowEditOpen) syncWorkflowFormToWorkflow();
-    if (workflowState.nodeEditOpen) syncNodeFormToWorkflow();
-    workflowState.editingWorkflow = JSON.parse(JSON.stringify(workflowState.editingWorkflow));
-    workflowState.editingWorkflow.id = `${workflowState.editingWorkflow.id}_copy`;
-    workflowState.editingWorkflow.name = `${workflowState.editingWorkflow.name} Copy`;
-    workflowState.currentWorkflowEditable = true;
-    workflowState.currentWorkflowPath = "";
-    workflowState.selectedNodeIndex = 0;
-    workflowState.nodeEditOpen = false;
-    workflowState.workflowEditOpen = true;
-    $("wfId").readOnly = false;
-    populateWorkflowForm();
-    renderEditorNodes();
-    renderNodeInspector();
-    renderWorkflowCards();
-    renderWorkflowInspector();
+    cloneWorkflowToWorkspace();
     setLog("已复制到工作区草稿，请保存。");
   });
 
@@ -148,6 +143,8 @@ export function initWorkflow() {
   initNodeOutputsAdvancedToggle();
   initNodeIteratePanel();
   initNodeInspectorTabs();
+  initWorkflowShellLayout();
+  initWorkflowAssist();
 
   $("testNodeBtn").addEventListener("click", async () => {
     try {

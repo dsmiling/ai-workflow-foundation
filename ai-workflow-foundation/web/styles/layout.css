@@ -48,7 +48,12 @@ nav {
   max-height: calc(100vh - 76px);
   overflow: hidden;
 }
-.page.active.workflow-layout { display: grid; }
+.page.active.workflow-layout {
+  display: grid;
+  height: calc(100vh - 76px);
+  max-height: calc(100vh - 76px);
+  overflow: hidden;
+}
 
 .settings-layout {
   min-height: calc(100vh - 76px);
@@ -58,6 +63,6 @@ nav {
   main { grid-template-columns: 1fr; }
   nav { display: flex; gap: 8px; }
   .tab { margin-bottom: 0; }
-  .workflow-toolbar, .workflow-shell, .run-grid { grid-template-columns: 1fr; }
-  .stage-body, .inspector { max-height: none; }
+  .workflow-toolbar, .run-grid { grid-template-columns: 1fr; }
+  .stage-body, .inspector-body { overflow: auto; }
 }

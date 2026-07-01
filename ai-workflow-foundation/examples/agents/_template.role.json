@@ -1,7 +1,7 @@
 {
   "template_id": "role_template",
   "label": "空白角色 Agent",
-  "provider": "cursor-agent-cli",
+  "provider": "cursor-agent-acp",
   "ident": {
     "name": "",
     "role": "",

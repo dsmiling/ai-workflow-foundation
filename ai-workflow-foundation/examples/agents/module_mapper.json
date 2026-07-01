@@ -1,7 +1,7 @@
 {
   "template_id": "module_mapper",
   "label": "模块映射师",
-  "provider": "cursor-agent-cli",
+  "provider": "cursor-agent-acp",
   "ident": {
     "name": "模块映射师",
     "role": "大活动功能到 StandardLib 模块映射",

@@ -24,6 +24,8 @@ from .packages import export_workflow_package, import_workflow_package
 from .runner import WorkflowRunner
 from .storage import WorkflowStore
 from .validation import validate_workflow_file
+from .workflow_assist import stream_workflow_assist
+from .assist_workspace import clear_workflow_assist_session
 from .workflows import (
     delete_workflow,
     find_workflow_path,
@@ -83,7 +85,72 @@ def create_server(
             if parts == ["agents", "generate", "stream"]:
                 self.handle_agent_generate_stream()
                 return
+            if parts == ["workflows", "assist", "stream"]:
+                self.handle_workflow_assist_stream()
+                return
             self.dispatch("POST")
+
+        def handle_workflow_assist_stream(self) -> None:
+            try:
+                body = self.read_json_body()
+                description = body.get("description")
+                if not isinstance(description, str) or not description.strip():
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "description is required.")
+                provider = body.get("provider")
+                if provider is not None and not isinstance(provider, str):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "provider must be a string.")
+                draft = body.get("draft")
+                if draft is not None and not isinstance(draft, dict):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "draft must be an object.")
+                messages = body.get("messages")
+                if messages is not None and not isinstance(messages, list):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "messages must be an array.")
+                selected_node_id = body.get("selected_node_id")
+                if selected_node_id is not None and not isinstance(selected_node_id, str):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "selected_node_id must be a string.")
+                focus_node_ids = body.get("focus_node_ids")
+                if focus_node_ids is not None and not isinstance(focus_node_ids, list):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "focus_node_ids must be an array.")
+                workflow_id = body.get("workflow_id")
+                if workflow_id is not None and not isinstance(workflow_id, str):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "workflow_id must be a string.")
+                session_id = body.get("session_id")
+                if session_id is not None and not isinstance(session_id, str):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "session_id must be a string.")
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+                self.end_headers()
+                try:
+                    for event in stream_workflow_assist(
+                        store,
+                        runner.skill_dirs,
+                        description=description,
+                        provider_id=provider,
+                        draft=draft,
+                        messages=messages,
+                        selected_node_id=selected_node_id,
+                        focus_node_ids=focus_node_ids,
+                        workflow_id=workflow_id if isinstance(workflow_id, str) else None,
+                        session_id=session_id if isinstance(session_id, str) else None,
+                    ):
+                        payload = json.dumps(event, ensure_ascii=False).encode("utf-8")
+                        self.wfile.write(b"event: message\ndata: ")
+                        self.wfile.write(payload)
+                        self.wfile.write(b"\n\n")
+                        self.wfile.flush()
+                except Exception as exc:
+                    payload = json.dumps({"type": "error", "message": str(exc)}, ensure_ascii=False).encode("utf-8")
+                    self.wfile.write(b"event: message\ndata: ")
+                    self.wfile.write(payload)
+                    self.wfile.write(b"\n\n")
+                    self.wfile.flush()
+            except ApiError as exc:
+                self.write_json(exc.status, {"error": exc.message})
+            except Exception as exc:
+                self.write_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
 
         def handle_agent_generate_stream(self) -> None:
             try:
@@ -100,6 +167,12 @@ def create_server(
                 messages = body.get("messages")
                 if messages is not None and not isinstance(messages, list):
                     raise ApiError(HTTPStatus.BAD_REQUEST, "messages must be an array.")
+                agent_id = body.get("agent_id")
+                if agent_id is not None and not isinstance(agent_id, str):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "agent_id must be a string.")
+                session_id = body.get("session_id")
+                if session_id is not None and not isinstance(session_id, str):
+                    raise ApiError(HTTPStatus.BAD_REQUEST, "session_id must be a string.")
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Cache-Control", "no-cache")
@@ -113,6 +186,8 @@ def create_server(
                         provider_id=provider,
                         draft=draft,
                         messages=messages,
+                        agent_id=agent_id if isinstance(agent_id, str) else None,
+                        session_id=session_id if isinstance(session_id, str) else None,
                     ):
                         payload = json.dumps(event, ensure_ascii=False).encode("utf-8")
                         self.wfile.write(b"event: message\ndata: ")
@@ -305,6 +380,20 @@ def create_server(
                         raise ApiError(HTTPStatus.BAD_REQUEST, "Missing workflow object.")
                     try:
                         return save_workflow(store, workflow, runner.skill_dirs)
+                    except ValueError as exc:
+                        raise ApiError(HTTPStatus.BAD_REQUEST, str(exc)) from exc
+            if len(parts) == 4 and parts[0] == "workflows" and parts[2] == "assist" and parts[3] == "session":
+                workflow_id = parts[1]
+                if method == "GET":
+                    from .assist_workspace import load_workflow_assist_session
+
+                    try:
+                        return load_workflow_assist_session(store, workflow_id)
+                    except ValueError as exc:
+                        raise ApiError(HTTPStatus.BAD_REQUEST, str(exc)) from exc
+                if method == "DELETE":
+                    try:
+                        return clear_workflow_assist_session(store, workflow_id)
                     except ValueError as exc:
                         raise ApiError(HTTPStatus.BAD_REQUEST, str(exc)) from exc
             if len(parts) == 2 and parts[0] == "workflows":

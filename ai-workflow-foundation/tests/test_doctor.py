@@ -10,7 +10,9 @@ class DoctorTests(unittest.TestCase):
         report = run_doctor(project)
 
         self.assertTrue(report.ok, report.to_dict())
-        self.assertGreaterEqual(len(report.checks), 6)
+        self.assertGreaterEqual(len(report.checks), 7)
+        check_names = {item["name"] for item in report.checks}
+        self.assertIn("acp providers", check_names)
 
 
 if __name__ == "__main__":

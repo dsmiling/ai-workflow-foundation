@@ -1,7 +1,7 @@
 {
   "template_id": "code_reviewer",
   "label": "方案评审员",
-  "provider": "codex-cli",
+  "provider": "codex-agent-acp",
   "ident": {
     "name": "方案评审员",
     "role": "技术方案与产物质量审查",

@@ -12,6 +12,7 @@ from .runner import WorkflowRunner
 from .server import create_server
 from .storage import WorkflowStore
 from .validation import validate_workflow_file
+from .unity_aibridge import inspect_aibridge
 from .workflows import get_workflow, list_workflows, save_workflow
 
 
@@ -52,6 +53,8 @@ def run_doctor(root: Path) -> DoctorReport:
     run_check(report, "validate demo workflow", lambda: check_validation(store, workflow, skills))
     run_check(report, "validate unity workflow", lambda: check_validation(store, unity_workflow, skills))
     run_check(report, "workflow catalog", lambda: check_workflow_catalog(store))
+    run_check(report, "aibridge integration", check_aibridge_integration)
+    run_check(report, "acp providers", check_acp_providers)
     run_check(report, "workflow save to workspace", lambda: check_workflow_save(store, skills))
     state_holder = {}
     unity_state_holder = {}
@@ -110,6 +113,30 @@ def check_workflow_catalog(store: WorkflowStore) -> str:
     if "unity_activity_create" not in ids:
         raise AssertionError("unity_activity_create missing from workflow catalog.")
     return str(len(workflows))
+
+
+def check_aibridge_integration() -> str:
+    result = inspect_aibridge()
+    if not result.get("configured"):
+        return "skipped (AIWF_UNITY_PROJECT_ROOT not set)"
+    if not result.get("ready"):
+        raise AssertionError(str(result.get("detail") or "AIBridge is not ready."))
+    return str(result.get("cli_path") or "ready")
+
+
+def check_acp_providers() -> str:
+    from .agent_providers import inspect_agent_provider
+
+    cursor = inspect_agent_provider("cursor-agent-acp")
+    codex = inspect_agent_provider("codex-agent-acp")
+    if not cursor.get("ready") and not codex.get("ready"):
+        return "skipped (no ACP provider configured)"
+    parts: list[str] = []
+    if cursor.get("ready"):
+        parts.append("cursor-agent-acp")
+    if codex.get("ready"):
+        parts.append("codex-agent-acp")
+    return ", ".join(parts) or "none ready"
 
 
 def check_workflow_save(store: WorkflowStore, skills: list[Path]) -> str:

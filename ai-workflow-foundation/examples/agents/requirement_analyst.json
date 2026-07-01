@@ -1,7 +1,7 @@
 {
   "template_id": "requirement_analyst",
   "label": "需求分析师",
-  "provider": "cursor-agent-cli",
+  "provider": "cursor-agent-acp",
   "ident": {
     "name": "需求分析师",
     "role": "Unity 大活动需求拆解与评审准备",

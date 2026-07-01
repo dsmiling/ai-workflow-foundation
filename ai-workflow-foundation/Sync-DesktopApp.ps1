@@ -32,7 +32,11 @@ foreach ($appRoot in $AppRoots) {
             if (Test-Path $dest) {
                 Remove-Item $dest -Recurse -Force
             }
-            Copy-Item $source $dest -Recurse -Force
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            robocopy $source $dest /E /XD __pycache__ .pytest_cache /XF *.pyc /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+            if ($LASTEXITCODE -ge 8) {
+                throw "Failed to sync $($item.Source) to $dest (robocopy exit code $LASTEXITCODE)."
+            }
         } else {
             Copy-Item $source $dest -Force
         }

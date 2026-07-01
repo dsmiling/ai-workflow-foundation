@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .agent_providers import normalize_agent_provider
+from .agent_providers import is_acp_provider, normalize_agent_provider
 from .agents import resolve_agent_provider_id
 from .executor import Executor, create_executor, normalize_executor_name, resolve_node_executor
 from copy import deepcopy
@@ -17,6 +17,7 @@ from .execution_result import (
     synthesize_from_artifact,
 )
 from .models import ExecutionResult, NodeRunState, NodeSpec, RunState, SkillSpec, WorkflowSpec
+from .node_acp import build_node_acp_context
 from .session import NodeSessionStore, SessionContext
 from .storage import WorkflowStore
 from .workflow_graph import WorkflowGraph
@@ -378,6 +379,24 @@ class WorkflowRunner:
             params["_session_context"] = session_context.to_dict()
             if feedback:
                 params["last_feedback"] = feedback
+            run_node.params = params
+        provider_id = self.agent_provider
+        if provider_id and is_acp_provider(normalize_agent_provider(provider_id)):
+            node_session = self.sessions.load_session(run_dir, node.id)
+            if session_context and (not node_session or not node_session.acp_chat_id):
+                raise ValueError("节点尚未完成 Turn1 执行，无法 iterate。请先执行节点。")
+            acp_ctx = build_node_acp_context(
+                run_id=run_dir.name,
+                run_dir=run_dir,
+                node=node,
+                skill=skill,
+                provider_id=normalize_agent_provider(provider_id),
+                session=node_session,
+                iterate=bool(session_context),
+                feedback=feedback,
+            )
+            params = dict(run_node.params)
+            params["_acp_context"] = acp_ctx.to_dict()
             run_node.params = params
         inputs = self._resolve_inputs(run_dir, state, run_node)
         executor = resolve_node_executor(

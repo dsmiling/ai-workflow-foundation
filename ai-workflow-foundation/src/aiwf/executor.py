@@ -12,6 +12,7 @@ from .agent_providers import (
     create_agent_provider,
     default_agent_provider,
     inspect_agent_provider,
+    is_acp_provider,
     list_agent_provider_specs,
     normalize_agent_provider,
 )
@@ -152,10 +153,23 @@ class AgentExecutor:
     store: WorkflowStore | None = None
 
     def run(self, node: NodeSpec, skill: SkillSpec | None, inputs: dict[str, str]) -> str:
+        acp_raw = (node.params or {}).get("_acp_context")
+        if isinstance(acp_raw, dict):
+            from .node_acp import NodeAcpContext, run_node_acp
+            from .session import NodeSessionStore
+
+            if self.store is None:
+                raise RuntimeError("ACP node execution requires WorkflowStore on AgentExecutor.")
+            context = NodeAcpContext.from_dict(acp_raw)
+            sessions = NodeSessionStore(self.store)
+            return run_node_acp(node, skill, inputs, context, sessions=sessions)
         agent_context = self._resolve_agent_context(node)
         prompt = build_executor_prompt(node, skill, inputs, agent_context=agent_context)
-        provider = create_agent_provider(self.provider_id)
-        return provider.generate(prompt)
+        provider = normalize_agent_provider(self.provider_id)
+        if is_acp_provider(provider):
+            raise RuntimeError("ACP provider requires _acp_context on node params.")
+        api_provider = create_agent_provider(self.provider_id)
+        return api_provider.generate(prompt)
 
     def _resolve_agent_context(self, node: NodeSpec) -> str | None:
         if self.store is None:

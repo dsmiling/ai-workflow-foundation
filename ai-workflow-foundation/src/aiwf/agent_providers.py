@@ -2,18 +2,29 @@ from __future__ import annotations
 
 import json
 import os
-import queue
 import shlex
 import shutil
-import subprocess
-import tempfile
-import threading
-import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 from urllib.request import Request, urlopen
+
+from .cli_acp import (
+    AcpSessionScope,
+    CliAcpClient,
+    SessionRegistry,
+    default_acp_timeout,
+    is_acp_provider,
+    resolve_spawn_argv,
+    stream_acp_message,
+)
+
+__all__ = [
+    "is_acp_provider",
+    "create_cli_session_provider",
+    "stream_provider_generate",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +40,13 @@ class AgentProvider(Protocol):
     spec: AgentProviderSpec
 
     def generate(self, prompt: str) -> str:
+        ...
+
+
+class CliSessionProvider(Protocol):
+    spec: AgentProviderSpec
+
+    def acquire_session(self, scope: AcpSessionScope) -> CliAcpClient:
         ...
 
 
@@ -55,18 +73,18 @@ AGENT_PROVIDER_SPECS: tuple[AgentProviderSpec, ...] = (
         requires=("OPENAI_API_KEY|AIWF_OPENAI_API_KEY", "AIWF_OPENAI_BASE_URL"),
     ),
     AgentProviderSpec(
-        id="cursor-agent-cli",
-        label="Cursor Agent CLI",
-        kind="cli",
-        description="本机 Cursor Agent CLI。",
-        requires=("AIWF_CURSOR_AGENT_CMD|agent",),
+        id="cursor-agent-acp",
+        label="Cursor Agent ACP",
+        kind="cli-session",
+        description="本机 Cursor Agent ACP 长会话。",
+        requires=("AIWF_CURSOR_ACP_CMD|agent", "CURSOR_API_KEY|agent login"),
     ),
     AgentProviderSpec(
-        id="codex-cli",
-        label="Codex CLI",
-        kind="cli",
-        description="本机 Codex CLI。",
-        requires=("AIWF_CODEX_CLI_CMD|codex",),
+        id="codex-agent-acp",
+        label="Codex Agent ACP",
+        kind="cli-session",
+        description="本机 Codex app-server ACP 长会话。",
+        requires=("AIWF_CODEX_ACP_CMD|codex",),
     ),
 )
 
@@ -85,7 +103,7 @@ def list_agent_provider_specs() -> list[dict[str, object]]:
 
 
 def default_agent_provider() -> str:
-    return os.environ.get("AIWF_AGENT_PROVIDER", "openai-api")
+    return os.environ.get("AIWF_AGENT_PROVIDER", "cursor-agent-acp")
 
 
 def normalize_agent_provider(provider: str | None) -> str:
@@ -94,9 +112,11 @@ def normalize_agent_provider(provider: str | None) -> str:
         "openai": "openai-api",
         "anthropic": "anthropic-api",
         "claude": "anthropic-api",
-        "cursor": "cursor-agent-cli",
-        "cursor-cli": "cursor-agent-cli",
-        "codex": "codex-cli",
+        "cursor": "cursor-agent-acp",
+        "cursor-cli": "cursor-agent-acp",
+        "cursor-agent-cli": "cursor-agent-acp",
+        "codex": "codex-agent-acp",
+        "codex-cli": "codex-agent-acp",
     }
     value = aliases.get(value, value)
     known = {spec.id for spec in AGENT_PROVIDER_SPECS}
@@ -116,16 +136,6 @@ def _command_available(command: str) -> bool:
     return shutil.which(token) is not None
 
 
-def build_cli_argv(command: str, prompt: str) -> list[str]:
-    argv = shlex.split(command, posix=os.name != "nt")
-    if not argv:
-        raise RuntimeError("CLI command is empty.")
-    resolved = shutil.which(argv[0])
-    if resolved:
-        argv[0] = resolved
-    return [*argv, prompt]
-
-
 def check_requirement(requirement: str) -> tuple[bool, str]:
     parts = [part.strip() for part in requirement.split("|") if part.strip()]
     if not parts:
@@ -133,6 +143,8 @@ def check_requirement(requirement: str) -> tuple[bool, str]:
     if len(parts) == 1:
         name = parts[0]
         if _env_set(name):
+            return True, name
+        if _command_available(name):
             return True, name
         return False, name
     env_names = [part for part in parts if part.isupper() or part.startswith("AIWF_")]
@@ -183,10 +195,34 @@ def test_agent_provider(provider_id: str, *, prompt: str | None = None) -> dict[
             "message": str(inspection["detail"]),
             "output": "",
         }
+    provider = normalize_agent_provider(provider_id)
+    if is_acp_provider(provider):
+        try:
+            workspace = Path(os.environ.get("AIWF_CURSOR_WORKSPACE") or os.getcwd())
+            scope = AcpSessionScope(
+                provider_id=provider,
+                scope_key="__aiwf_ping__",
+                workspace=workspace,
+            )
+            registry = SessionRegistry.get()
+            client = registry.acquire(scope)
+            chat_id = client.create_chat()
+            registry.release_scope(scope.scope_key)
+            return {
+                "status": "ok",
+                "message": f"ACP 握手成功（session={chat_id[:12]}…）。",
+                "output": chat_id,
+            }
+        except Exception as exc:
+            return {
+                "status": "error",
+                "message": str(exc),
+                "output": "",
+            }
     test_prompt = (prompt or "Reply with exactly: AIWF agent ok").strip()
     try:
-        provider = create_agent_provider(provider_id)
-        output = provider.generate(test_prompt)
+        api_provider = create_agent_provider(provider_id)
+        output = api_provider.generate(test_prompt)
         content = output.strip()
         if not content:
             return {
@@ -215,11 +251,35 @@ def create_agent_provider(provider_id: str | None) -> AgentProvider:
         return OpenAICompatibleApiProvider()
     if provider == "anthropic-api":
         return AnthropicApiProvider()
-    if provider == "cursor-agent-cli":
-        return CursorAgentCliProvider()
-    if provider == "codex-cli":
-        return CodexCliProvider()
+    if is_acp_provider(provider):
+        raise RuntimeError(
+            f"Provider {provider} is cli-session only; use create_cli_session_provider() and ACP session APIs."
+        )
     raise ValueError(f"Unknown agent provider: {provider_id}")
+
+
+def create_cli_session_provider(provider_id: str | None) -> CliSessionProvider:
+    provider = normalize_agent_provider(provider_id)
+    if provider == "cursor-agent-acp":
+        return CursorAgentAcpProvider()
+    if provider == "codex-agent-acp":
+        return CodexAgentAcpProvider()
+    raise ValueError(f"Not a cli-session provider: {provider_id}")
+
+
+def stream_provider_generate(provider_id: str, prompt: str) -> Iterator[dict[str, object]]:
+    """API-only batch generate stream (CLI providers must use ACP session APIs)."""
+    provider = normalize_agent_provider(provider_id)
+    if is_acp_provider(provider):
+        raise RuntimeError(f"Provider {provider} requires ACP session; use stream_acp_message().")
+    yield {"kind": "progress", "stage": "api", "message": "调用 API...", "percent": 20}
+    output = create_agent_provider(provider).generate(prompt)
+    preview = output.strip().splitlines()
+    for line in preview[:24]:
+        yield {"kind": "log", "text": line}
+    if len(preview) > 24:
+        yield {"kind": "log", "text": f"... 共 {len(preview)} 行"}
+    yield {"kind": "complete", "output": output}
 
 
 class OpenAIApiProvider:
@@ -282,166 +342,15 @@ class AnthropicApiProvider:
         return content.rstrip() + "\n"
 
 
-class CursorAgentCliProvider:
-    spec = next(item for item in AGENT_PROVIDER_SPECS if item.id == "cursor-agent-cli")
+class CursorAgentAcpProvider:
+    spec = next(item for item in AGENT_PROVIDER_SPECS if item.id == "cursor-agent-acp")
 
-    def generate(self, prompt: str) -> str:
-        command = os.environ.get(
-            "AIWF_CURSOR_AGENT_CMD",
-            "agent --trust --print --output-format text",
-        )
-        return run_cli_prompt(command, prompt, timeout=int(os.environ.get("AIWF_CURSOR_AGENT_TIMEOUT", "300")))
+    def acquire_session(self, scope: AcpSessionScope) -> CliAcpClient:
+        return SessionRegistry.get().acquire(scope)
 
 
-class CodexCliProvider:
-    spec = next(item for item in AGENT_PROVIDER_SPECS if item.id == "codex-cli")
+class CodexAgentAcpProvider:
+    spec = next(item for item in AGENT_PROVIDER_SPECS if item.id == "codex-agent-acp")
 
-    def generate(self, prompt: str) -> str:
-        command = os.environ.get(
-            "AIWF_CODEX_CLI_CMD",
-            "codex exec --sandbox workspace-write --skip-git-repo-check",
-        )
-        return run_codex_prompt(command, prompt, timeout=int(os.environ.get("AIWF_CODEX_CLI_TIMEOUT", "300")))
-
-
-def run_codex_prompt(command: str, prompt: str, *, timeout: int) -> str:
-    argv = shlex.split(command, posix=os.name != "nt")
-    if not argv:
-        raise RuntimeError("CLI command is empty.")
-    resolved = shutil.which(argv[0])
-    if resolved:
-        argv[0] = resolved
-    has_output_flag = "--output-last-message" in argv or "-o" in argv
-    output_path: str | None = None
-    run_argv = list(argv)
-    if not has_output_flag:
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as tmp:
-            output_path = tmp.name
-        run_argv.extend(["-o", output_path])
-    completed = subprocess.run(
-        [*run_argv, prompt],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-        shell=False,
-        stdin=subprocess.DEVNULL,
-    )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        if output_path:
-            Path(output_path).unlink(missing_ok=True)
-        raise RuntimeError(detail or f"CLI exited with code {completed.returncode}")
-    content = ""
-    if output_path and Path(output_path).exists():
-        content = Path(output_path).read_text(encoding="utf-8").strip()
-        Path(output_path).unlink(missing_ok=True)
-    if not content:
-        content = (completed.stdout or "").strip()
-    if not content:
-        raise RuntimeError("CLI did not return artifact content.")
-    return content.rstrip() + "\n"
-
-
-def run_cli_prompt(command: str, prompt: str, *, timeout: int) -> str:
-    output = ""
-    for event in stream_cli_prompt(command, prompt, timeout=timeout):
-        if event.get("kind") == "complete":
-            output = str(event.get("output") or "")
-    if not output.strip():
-        raise RuntimeError("CLI did not return artifact content.")
-    return output
-
-
-def stream_cli_prompt(command: str, prompt: str, *, timeout: int) -> Iterator[dict[str, object]]:
-    argv = build_cli_argv(command, prompt)
-    yield {"kind": "progress", "stage": "cli", "message": f"启动 {Path(argv[0]).name}...", "percent": 12}
-    proc = subprocess.Popen(
-        argv,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-        shell=False,
-        stdin=subprocess.DEVNULL,
-    )
-    assert proc.stdout is not None
-    assert proc.stderr is not None
-    line_queue: queue.Queue[tuple[str, str] | None] = queue.Queue()
-
-    def pump(stream, label: str) -> None:
-        for line in iter(stream.readline, ""):
-            line_queue.put((label, line.rstrip("\r\n")))
-        stream.close()
-        line_queue.put(None)
-
-    threading.Thread(target=pump, args=(proc.stdout, "stdout"), daemon=True).start()
-    threading.Thread(target=pump, args=(proc.stderr, "stderr"), daemon=True).start()
-    finished_streams = 0
-    stdout_lines: list[str] = []
-    stderr_lines: list[str] = []
-    deadline = time.time() + timeout
-    while finished_streams < 2:
-        if time.time() > deadline:
-            proc.kill()
-            raise RuntimeError(f"CLI timed out after {timeout} seconds")
-        try:
-            item = line_queue.get(timeout=0.2)
-        except queue.Empty:
-            if proc.poll() is not None and line_queue.empty():
-                break
-            continue
-        if item is None:
-            finished_streams += 1
-            continue
-        label, text = item
-        if not text:
-            continue
-        if label == "stdout":
-            stdout_lines.append(text)
-            yield {"kind": "log", "text": text}
-        else:
-            stderr_lines.append(text)
-            yield {"kind": "log", "text": f"[stderr] {text}"}
-    return_code = proc.wait(timeout=5)
-    if return_code != 0:
-        detail = "\n".join((stderr_lines or stdout_lines)[-20:]).strip()
-        raise RuntimeError(detail or f"CLI exited with code {return_code}")
-    content = "\n".join(stdout_lines).strip()
-    if not content:
-        content = "\n".join(stderr_lines).strip()
-    if not content:
-        raise RuntimeError("CLI did not return artifact content.")
-    yield {"kind": "complete", "output": content.rstrip() + "\n"}
-
-
-def stream_provider_generate(provider_id: str, prompt: str) -> Iterator[dict[str, object]]:
-    provider = normalize_agent_provider(provider_id)
-    if provider == "cursor-agent-cli":
-        command = os.environ.get(
-            "AIWF_CURSOR_AGENT_CMD",
-            "agent --trust --print --output-format text",
-        )
-        timeout = int(os.environ.get("AIWF_CURSOR_AGENT_TIMEOUT", "300"))
-        yield from stream_cli_prompt(command, prompt, timeout=timeout)
-        return
-    if provider == "codex-cli":
-        command = os.environ.get(
-            "AIWF_CODEX_CLI_CMD",
-            "codex exec --sandbox workspace-write --skip-git-repo-check",
-        )
-        timeout = int(os.environ.get("AIWF_CODEX_CLI_TIMEOUT", "300"))
-        yield {"kind": "progress", "stage": "cli", "message": "启动 codex...", "percent": 12}
-        output = run_codex_prompt(command, prompt, timeout=timeout)
-        for line in output.splitlines()[:30]:
-            yield {"kind": "log", "text": line}
-        yield {"kind": "complete", "output": output}
-        return
-    yield {"kind": "progress", "stage": "api", "message": "调用 API...", "percent": 20}
-    output = create_agent_provider(provider).generate(prompt)
-    preview = output.strip().splitlines()
-    for line in preview[:24]:
-        yield {"kind": "log", "text": line}
-    if len(preview) > 24:
-        yield {"kind": "log", "text": f"... 共 {len(preview)} 行"}
-    yield {"kind": "complete", "output": output}
+    def acquire_session(self, scope: AcpSessionScope) -> CliAcpClient:
+        return SessionRegistry.get().acquire(scope)
